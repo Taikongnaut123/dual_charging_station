@@ -155,15 +155,15 @@ jobs:
               run: |
                   set -euo pipefail
                   STAGE="dist/${PKG_NAME}"
-                  # 关键：不 source 本工程的 colcon overlay，只用系统 ROS2 + 产物自带的 lib/，
-                  # 这正是目标机上的真实情形。
-                  # 上一版就是因为漏了这步检查，发出去的 mdc_bridge 在板子上报
-                  # libmdc_serial__rosidl_typesupport_cpp.so: cannot open shared object file。
+                  # 关键：既不 source 本工程的 colcon overlay，也**不设 LD_LIBRARY_PATH**，
+                  # 完全靠二进制自带的 RPATH 去找 mdc_serial 的库 —— 这正是用户在目标机上
+                  # 直接敲 ./bin/mdc_bridge 时的真实情形。
+                  # 这里翻过两次车：先是打包漏了库；后来用了 DT_RUNPATH，而它对 dlopen
+                  # 无效，fastrtps 那几个运行时加载的库仍然找不到。
                   APP_BIN="$STAGE/bin/dual_charging_station" \
                   BRIDGE_BIN="$STAGE/bin/mdc_bridge" \
                   FAKE_BIN="$STAGE/bin/mdc_fake_pub" \
                   OVERLAY_SETUP="" \
-                  LD_LIBRARY_PATH="$PWD/$STAGE/lib" \
                   bash tools/ci_smoke_test.sh
 
             - name: 发布到滚动 Release（覆盖同名产物）

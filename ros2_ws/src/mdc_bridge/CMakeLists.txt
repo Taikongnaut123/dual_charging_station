@@ -45,4 +45,28 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME}
 )
 
+# ---------------------------------------------------------------------------
+# 让安装后的可执行文件自己找到 mdc_serial 的接口库。
+#
+# 打包后接口库放在 <包根>/lib/，可执行文件放在 <包根>/bin/，相对位置固定，
+# 所以用 $ORIGIN（运行时二进制自身所在目录）定位即可：$ORIGIN/../lib。
+# 整个包目录拷到哪、挪到哪都能直接跑，不需要重新配置。
+#
+# 不设这个的话，用户直接敲 ./bin/mdc_bridge 会报：
+#     libmdc_serial__rosidl_typesupport_cpp.so: cannot open shared object file
+# （未打包时由 colcon overlay 的 LD_LIBRARY_PATH 兜住，所以在开发机上察觉不到）
+#
+# --disable-new-dtags 是**必须**的，不能省：默认链出的标记是 DT_RUNPATH，
+# 而 DT_RUNPATH 只对可执行文件自己的直接依赖生效，**对 dlopen 无效**。
+# 那几个 typesupport 库（fastrtps / introspection / generator_c）恰恰是运行时
+# dlopen 的，用 DT_RUNPATH 会漏掉，报错变成：
+#     Could not load library libmdc_serial__rosidl_typesupport_fastrtps_cpp.so
+# 换成传统的 DT_RPATH，它会被继承、且对 dlopen 生效，才能真正自包含。
+# ---------------------------------------------------------------------------
+set_target_properties(mdc_bridge mdc_fake_pub PROPERTIES
+  INSTALL_RPATH "$ORIGIN/../lib"
+  BUILD_WITH_INSTALL_RPATH TRUE
+  LINK_FLAGS "-Wl,--disable-new-dtags"
+)
+
 ament_package()

@@ -391,6 +391,13 @@ ROS 装的不是默认发行版时用 `ROS_DISTRO` 环境变量指定。
 introspection / generator_c 那几个是运行时 `dlopen` 的，`ldd` 看不见——
 所以打包时整套带上，少任何一个都会在启动或首次调用服务时报找不到库。
 
+为了让 `./bin/mdc_bridge` 直接敲就能跑（不必依赖启动脚本设环境变量），
+两个可执行文件都链了 `RPATH=$ORIGIN/../lib`，见 `ros2_ws/src/mdc_bridge/CMakeLists.txt`。
+注意那里必须带 `-Wl,--disable-new-dtags`：默认链出的是 `DT_RUNPATH`，
+而 `DT_RUNPATH` **对 dlopen 无效**，上面那几个运行时加载的库照样找不到，
+报错会变成 `Could not load library libmdc_serial__rosidl_typesupport_fastrtps_cpp.so`。
+换成传统 `DT_RPATH` 才会被继承并对 dlopen 生效，**不要删掉这行**。
+
 机器人上如果装有官方 `mdc_serial` 包，**以官方为准**：删掉包内 `lib/`，
 改用机器人上 colcon 构建出的版本即可。
 
