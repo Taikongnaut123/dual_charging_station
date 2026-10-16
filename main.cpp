@@ -117,7 +117,8 @@ int main(int argc, char *argv[])
     // ------------------------------------------------------------------
     if (parser.isSet(verboseOption))
     {
-        const auto emitLine = [](const QString &line) {
+        const auto emitLine = [](const QString &line)
+        {
             std::fprintf(stdout, "%s\n", qPrintable(line));
             std::fflush(stdout);
         };
@@ -125,13 +126,15 @@ int main(int argc, char *argv[])
         BridgeClient *client = window.bridgeClient();
 
         QObject::connect(client, &BridgeClient::linkStateChanged,
-                         [emitLine](BridgeClient::LinkState s) {
+                         [emitLine](BridgeClient::LinkState s)
+                         {
                              emitLine(QStringLiteral("[链路] %1")
                                           .arg(BridgeClient::linkStateText(s)));
                          });
 
         QObject::connect(client, &BridgeClient::commandFinished,
-                         [emitLine](int id, const QString &cmd, bool ok, const QString &msg) {
+                         [emitLine](int id, const QString &cmd, bool ok, const QString &msg)
+                         {
                              emitLine(QStringLiteral("[指令] #%1 %2 -> %3 (%4)")
                                           .arg(id)
                                           .arg(cmd)
@@ -140,21 +143,22 @@ int main(int argc, char *argv[])
                          });
 
         QObject::connect(client, &BridgeClient::logMessage,
-                         [emitLine](int level, const QString &msg) {
+                         [emitLine](int level, const QString &msg)
+                         {
                              emitLine(QStringLiteral("[日志 L%1] %2").arg(level).arg(msg));
                          });
 
         // 每 2 秒一条统计
         auto *statTimer = new QTimer(&window);
-        QObject::connect(statTimer, &QTimer::timeout, [emitLine, client]() {
+        QObject::connect(statTimer, &QTimer::timeout, [emitLine, client]()
+                         {
             const MdcData &d = client->lastData();
             emitLine(QStringLiteral("[统计] 帧=%1 速率=%2Hz 丢帧=%3 链路=%4 电量=%5%")
                          .arg(client->frameCount())
                          .arg(client->frameRateHz())
                          .arg(client->lostFrames())
                          .arg(BridgeClient::linkStateText(client->linkState()))
-                         .arg(d.batterySoc));
-        });
+                         .arg(d.batterySoc)); });
         statTimer->start(2000);
     }
 
