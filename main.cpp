@@ -13,6 +13,23 @@
 
 int main(int argc, char *argv[])
 {
+    // ------------------------------------------------------------------
+    // 关掉 Qt 的 xcb-GLX 集成。
+    //
+    // 工控板/开发板上板卡厂商的 GPU 驱动常常不全（RK3588 上典型），Qt 的 xcb
+    // 平台插件启动时会通过 GLX 集成去探测 Mesa 驱动，探测失败就往终端刷：
+    //     libGL error: glx: failed to create dri3 screen
+    //     libGL error: failed to load driver: rockchip
+    // 这些只是噪音：本程序界面全部由 QPainter 光栅绘制，一行 OpenGL 都不用，
+    // 探测失败后 Qt 自动走软件路径，界面照常显示。
+    // 置成 none 让 xcb 干脆不加载 GLX 集成插件，从根上不产生这些报错。
+    //
+    // 必须在 QApplication 构造之前 —— 平台插件就是在那时加载的。
+    // 只在外部没指定时才设默认值，保留用环境变量改回去的余地。
+    // ------------------------------------------------------------------
+    if (qEnvironmentVariableIsEmpty("QT_XCB_GL_INTEGRATION"))
+        qputenv("QT_XCB_GL_INTEGRATION", "none");
+
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     // 工控屏普遍是高 DPI 小尺寸面板，开启缩放保证界面不糊
     QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);

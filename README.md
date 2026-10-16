@@ -262,6 +262,27 @@ ros2 run mdc_bridge mdc_bridge --ros-args -p peer_host:=192.168.1.77 -p peer_por
 QT_QPA_PLATFORM=linuxfb ./dual_charging_station -f
 ```
 
+### 工控板上的 libGL 报错（可忽略）
+
+在 RK3588 这类板子上启动时，终端可能刷这几行：
+
+```
+libGL error: glx: failed to create dri3 screen
+libGL error: failed to load driver: rockchip
+```
+
+这是 Qt 的 xcb 平台插件在探测 GLX 集成时，板卡厂商的 GPU 驱动不全导致的，
+**与本程序无关，也不影响显示**：界面全部由 `QPainter` 光栅绘制，一行 OpenGL 都不用，
+探测失败后 Qt 自动走软件路径，窗口照常显示。
+
+程序启动时已经自动把 `QT_XCB_GL_INTEGRATION` 置为 `none`（在 `QApplication` 构造之前，
+见 `main.cpp`），让 xcb 干脆不加载 GLX 集成插件，从根上不产生这些报错。
+这个默认值只在外部没指定时才生效，需要用回 GLX 时用环境变量覆盖即可：
+
+```bash
+QT_XCB_GL_INTEGRATION=xcb_glx ./dual_charging_station
+```
+
 ## 10. 持续集成（GitHub Actions）
 
 两个工作流，各编一个架构，都是 Linux：
