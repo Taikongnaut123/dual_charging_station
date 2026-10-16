@@ -262,3 +262,59 @@ ros2 run mdc_bridge mdc_bridge --ros-args -p peer_host:=192.168.1.77 -p peer_por
 QT_QPA_PLATFORM=linuxfb ./dual_charging_station -f
 ```
 
+## 10. 持续集成（GitHub Actions）
+
+两个工作流，各编一个架构，都是 Linux：
+
+| 工作流文件 | 运行器 | 产物 |
+| --- | --- | --- |
+| `.github/workflows/build-x86_64.yml` | `ubuntu-22.04` | `dual_charging_station-linux-x86_64.tar.gz` |
+| `.github/workflows/build-arm64.yml` | `ubuntu-22.04-arm` | `dual_charging_station-linux-arm64.tar.gz` |
+
+**触发方式**：push 到 `master`，或在 Actions 页面手动触发（`workflow_dispatch`）。
+
+**每个工作流做的事**：
+
+1. 装 Qt5 + ROS2 Humble
+2. `qmake` 编界面程序，`colcon` 编桥（`mdc_bridge` + `mdc_fake_pub`）
+3. 校验产物架构与动态库（防止编成主机架构、防止缺库）
+4. 跑冒烟测试 `tools/ci_smoke_test.sh`
+5. 打包 tar.gz + sha256，上传到滚动 Release
+
+**产物管理：不做版本管理。** 两份产物都挂在固定 tag `latest` 的同一个 Release 上，
+同名文件直接覆盖（`gh release upload --clobber`），所以 Releases 页面永远只有一份最新的，
+下载地址固定不变，不保留历史版本。两个架构的文件名不同，各覆盖各的；两个工作流
+用同一个 `concurrency` 组串行执行，避免同时改 Release 打架。
+
+**为什么两个架构都用 22.04**：ROS2 Humble 官方只支持 Ubuntu 22.04；更重要的是 glibc 基线 ——
+在 24.04（glibc 2.39）上编出来的二进制，拿到跑 22.04（glibc 2.35）的一体屏上会直接报
+`GLIBC_2.38 not found`。arm64 用的是 GitHub 的 arm64 原生运行器（`ubuntu-22.04-arm`，
+公开仓库免费不限量），是真 aarch64 机器而不是 QEMU 模拟，所以编译速度和 x86 一样正常。
+
+### 冒烟测试 `tools/ci_smoke_test.sh`
+
+CI 里不只验证"编过了"，而是真的跑一遍。本地也能跑，用来复现 CI 的检查：
+
+```bash
+tools/ci_smoke_test.sh
+```
+
+三个阶段，任一失败即返回非 0：
+
+| 阶段 | 做什么 | 证明了什么 |
+| --- | --- | --- |
+| 1 | 无头启动界面（环回模式，跑 8 秒） | 二进制能启动、5 个页面都能构造、事件循环在跑 |
+| 2 | 假设备 → 桥 → UDP → 界面 | 界面确实收到了 10Hz 数据流，而不是"只是没崩" |
+| 3 | 模拟界面下发 5 条控制指令 | UDP → 桥 → ROS2 服务 这一向也通，假设备收到了正确参数 |
+
+无头运行靠 `QT_QPA_PLATFORM=offscreen`（CI 里没有显示器）。界面新增了 `--verbose`
+参数，把链路状态与帧数打到标准输出，脚本据此判断"真的收到数据了"：
+
+```bash
+QT_QPA_PLATFORM=offscreen ./dual_charging_station --verbose --bridge-host 127.0.0.1
+# [链路] 在线
+# [统计] 帧=119 速率=10Hz 丢帧=0 链路=在线 电量=39%
+```
+
+这个参数在现场排障时同样有用：一体屏上没调试器，把输出重定向到文件就能事后追溯。
+

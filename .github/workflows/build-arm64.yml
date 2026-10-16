@@ -1,0 +1,231 @@
+# ============================================================================
+#  CI：编译 arm64（Linux / Ubuntu 22.04）
+# ============================================================================
+#
+#  干什么：
+#    1. 装 Qt5 与 ROS2 Humble（arm64 版）
+#    2. qmake 编界面程序，colcon 编 ROS2 桥（mdc_bridge + mdc_fake_pub）
+#    3. 冒烟测试：无头启动界面 + 假设备全链路 + 下发 5 条控制指令
+#    4. 打包成 tar.gz，上传到**滚动 Release**（tag 固定为 latest）
+#
+#  产物管理策略：
+#    不做版本管理，同名文件直接覆盖 —— Releases 页面永远只有一份最新的，
+#    下载地址固定不变。历史版本不保留。
+#
+#  同一个 push 会同时触发 build-x86_64.yml，两个架构各出一份产物。
+#  两份产物文件名不同，各覆盖各的。
+#
+#  ── 为什么能直接原生编译，不用 QEMU 模拟 ──
+#    GitHub 现在提供 arm64 原生托管运行器，标签是 ubuntu-22.04-arm，
+#    公开仓库免费且不限量。它是真正的 aarch64 机器，不是模拟层，
+#    所以 colcon 编译速度正常，也不会出现模拟环境下偶发的编译/运行怪问题。
+#
+#  ── 为什么用 22.04 而不是 24.04 ──
+#    1. ROS2 Humble 官方只支持 Ubuntu 22.04；
+#    2. 更关键的是 glibc 基线：在 24.04（glibc 2.39）上编出来的二进制，
+#       拿到跑 22.04（glibc 2.35）的一体屏上会直接报 GLIBC_2.38 not found。
+#       用 22.04 编，目标机是 22.04 或更新的系统都能跑。
+# ============================================================================
+name: 构建 arm64
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+# 两个架构都要往同一个 Release 里写，串行执行，避免同时改 Release 打架
+concurrency:
+  group: release-latest
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  ROS_DISTRO: humble
+  RELEASE_TAG: latest
+  PKG_NAME: dual_charging_station-linux-arm64
+
+jobs:
+  build:
+    name: 编译 · 冒烟测试 · 发布
+    # arm64 原生运行器（真 aarch64 机器，非 QEMU 模拟）
+    runs-on: ubuntu-22.04-arm
+    timeout-minutes: 60
+
+    steps:
+      - name: 取出源码
+        uses: actions/checkout@v4
+
+      - name: 显示构建环境
+        run: |
+          echo "运行器    : $RUNNER_NAME"
+          echo "架构      : $(uname -m)"
+          echo "系统      : $(. /etc/os-release && echo "$PRETTY_NAME")"
+          echo "内核      : $(uname -r)"
+          echo "CPU       : $(nproc) 核"
+          echo "提交      : $GITHUB_SHA"
+          echo "触发方式  : $GITHUB_EVENT_NAME"
+
+      - name: 安装 Qt5 与图形依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            qtbase5-dev \
+            qtbase5-dev-tools \
+            qt5-qmake \
+            qttools5-dev-tools \
+            libgl1-mesa-dev \
+            libgl1-mesa-dri \
+            libegl1 \
+            fonts-dejavu-core \
+            file
+          echo "Qt 版本：$(qmake -query QT_VERSION)"
+
+      - name: 配置 ROS2 Humble 软件源
+        run: |
+          curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /tmp/ros.key
+          sudo mv /tmp/ros.key /usr/share/keyrings/ros-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" \
+            | sudo tee /etc/apt/sources.list.d/ros2.list >/dev/null
+          sudo apt-get update
+
+      - name: 安装 ROS2 依赖
+        run: |
+          sudo apt-get install -y --no-install-recommends \
+            ros-${ROS_DISTRO}-ros-base \
+            ros-${ROS_DISTRO}-ament-cmake \
+            ros-${ROS_DISTRO}-rosidl-default-generators \
+            ros-${ROS_DISTRO}-rosidl-default-runtime \
+            python3-colcon-common-extensions
+
+      - name: 编译 Qt 界面程序（qmake）
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          cd build
+          qmake ../dual_charging_station.pro "CONFIG+=release" "CONFIG-=debug"
+          make -j"$(nproc)"
+          test -x dual_charging_station
+
+      - name: 编译 ROS2 桥（colcon）
+        run: |
+          set -euo pipefail
+          source /opt/ros/${ROS_DISTRO}/setup.bash
+          cd ros2_ws
+          colcon build --symlink-install --event-handlers console_cohesion+
+
+      - name: 校验产物架构与动态库
+        run: |
+          set -euo pipefail
+          file build/dual_charging_station
+          file build/dual_charging_station | grep -q 'ARM aarch64' \
+            || { echo "产物架构不对，期望 ARM aarch64"; exit 1; }
+          if ldd build/dual_charging_station | grep -q 'not found'; then
+            echo "存在找不到的动态库："
+            ldd build/dual_charging_station | grep 'not found'
+            exit 1
+          fi
+          echo "架构与动态库检查通过"
+
+      - name: 冒烟测试（无头启动 + 全链路 + 控制指令）
+        run: |
+          source /opt/ros/${ROS_DISTRO}/setup.bash
+          bash tools/ci_smoke_test.sh
+
+      - name: 出错时上传测试日志
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-logs-arm64
+          path: build/ci-logs/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: 打包
+        run: |
+          set -euo pipefail
+          STAGE="dist/${PKG_NAME}"
+          mkdir -p "$STAGE/bin"
+
+          cp build/dual_charging_station "$STAGE/bin/"
+          cp ros2_ws/install/mdc_bridge/lib/mdc_bridge/mdc_bridge   "$STAGE/bin/"
+          cp ros2_ws/install/mdc_bridge/lib/mdc_bridge/mdc_fake_pub "$STAGE/bin/"
+          cp tools/run_demo.sh tools/ci_smoke_test.sh README.md "$STAGE/"
+
+          # 去掉调试符号，一体屏上体积小一点
+          strip "$STAGE"/bin/*
+
+          {
+            echo "产物      : ${PKG_NAME}"
+            echo "架构      : $(uname -m)"
+            echo "系统      : $(. /etc/os-release && echo "$PRETTY_NAME")"
+            echo "提交      : ${GITHUB_SHA}"
+            echo "构建时间  : $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            echo "Qt 版本   : $(qmake -query QT_VERSION)"
+            echo "编译器    : $(g++ --version | head -n 1)"
+            echo
+            echo "内容："
+            echo "  bin/dual_charging_station   充电桩显示屏界面（不依赖 ROS2）"
+            echo "  bin/mdc_bridge              ROS2 桥（目标机需已装 ROS2 ${ROS_DISTRO}）"
+            echo "  bin/mdc_fake_pub            假设备，无真机时验证链路用"
+            echo "  run_demo.sh / ci_smoke_test.sh / README.md"
+            echo
+            echo "目标机运行界面程序前需要装："
+            echo "  sudo apt install libqt5core5a libqt5gui5 libqt5widgets5 libqt5network5"
+          } > "$STAGE/构建信息.txt"
+
+          tar -czf "dist/${PKG_NAME}.tar.gz" -C dist "${PKG_NAME}"
+          cd dist
+          sha256sum "${PKG_NAME}.tar.gz" > "${PKG_NAME}.tar.gz.sha256"
+          echo "打包完成："
+          ls -lh
+
+      - name: 发布到滚动 Release（覆盖同名产物）
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMIT_SHA: ${{ github.sha }}
+          TRIGGER: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release [$RELEASE_TAG] 已存在，本次覆盖其中的同名产物"
+          else
+            echo "Release [$RELEASE_TAG] 不存在，创建"
+            gh release create "$RELEASE_TAG" \
+              --target "$COMMIT_SHA" \
+              --title "最新构建（滚动覆盖）" \
+              --notes "占位说明，下一步会覆盖成正式内容"
+          fi
+
+          gh release upload "$RELEASE_TAG" \
+            "dist/${PKG_NAME}.tar.gz" \
+            "dist/${PKG_NAME}.tar.gz.sha256" \
+            --clobber
+
+          {
+            echo "本 Release 由 CI 自动覆盖更新：**永远只有最新一次**成功构建的产物，不保留历史版本。"
+            echo
+            echo "| 项 | 值 |"
+            echo "| --- | --- |"
+            echo "| 最近提交 | ${COMMIT_SHA} |"
+            echo "| 触发方式 | ${TRIGGER} |"
+            echo "| 来源分支 | ${GITHUB_REF_NAME} |"
+            echo "| 更新时间 | $(date -u '+%Y-%m-%d %H:%M UTC') |"
+            echo "| 本次覆盖 | ${PKG_NAME}.tar.gz |"
+            echo
+            echo "x86_64 与 arm64 两份产物分别由 build-x86_64.yml 与 build-arm64.yml 上传，各覆盖各的文件。"
+            echo
+            echo "用法：解包后进入目录，直接执行 bin/dual_charging_station --bridge-host 桥的IP。"
+            echo "装了 ROS2 的机器上再跑 bin/mdc_bridge；没有真机时用 bin/mdc_fake_pub 验证整条链路。"
+          } > /tmp/release-notes.md
+
+          gh release edit "$RELEASE_TAG" \
+            --title "最新构建（滚动覆盖，不做版本管理）" \
+            --notes-file /tmp/release-notes.md
+
+          echo
+          echo "Release 产物列表："
+          gh release view "$RELEASE_TAG" --json assets --jq '.assets[] | "\(.name)\t\(.size) 字节"'
