@@ -1,0 +1,9 @@
+# 风扇控制 (0xF1)
+# 字段名与顺序依据 doc/MDC接口使用指南.md 第 2.1 节
+uint8 fan1_pwm
+uint8 fan2_pwm
+uint8 fan3_pwm
+uint8 fan4_pwm
+---
+bool success
+string message

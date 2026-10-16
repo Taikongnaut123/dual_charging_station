@@ -1,0 +1,52 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "qmake + make（构建）",
+            "type": "shell",
+            "command": "mkdir -p build && cd build && qmake ../dual_charging_station.pro && make -j$(nproc)",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "构建 ROS2 桥 (colcon)",
+            "type": "shell",
+            "command": "source /opt/ros/humble/setup.bash && cd ros2_ws && colcon build --symlink-install",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "跑假设备 + 桥 + 界面（一键演示）",
+            "type": "shell",
+            "command": "bash tools/run_demo.sh",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "清理构建目录",
+            "type": "shell",
+            "command": "rm -rf build ros2_ws/build ros2_ws/install ros2_ws/log",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        }
+    ]
+}

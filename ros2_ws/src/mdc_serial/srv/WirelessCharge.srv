@@ -1,0 +1,6 @@
+# 无线充电 (0xF4)
+# 4 字节透传载荷，避免使用 0xFFFFFFFF
+uint8[4] payload
+---
+bool success
+string message

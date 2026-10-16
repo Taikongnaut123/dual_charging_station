@@ -1,0 +1,31 @@
+{
+    "version": 4,
+    "configurations": [
+        {
+            "name": "Qt5 (Linux)",
+            "includePath": [
+                "${workspaceFolder}",
+                "${workspaceFolder}/**",
+                "/usr/include/x86_64-linux-gnu/qt5",
+                "/usr/include/x86_64-linux-gnu/qt5/QtCore",
+                "/usr/include/x86_64-linux-gnu/qt5/QtGui",
+                "/usr/include/x86_64-linux-gnu/qt5/QtWidgets",
+                "/usr/include/x86_64-linux-gnu/qt5/QtNetwork"
+            ],
+            "defines": [
+                "QT_CORE_LIB",
+                "QT_GUI_LIB",
+                "QT_WIDGETS_LIB",
+                "QT_NETWORK_LIB"
+            ],
+            "forcedInclude": [],
+            "compilerPath": "/usr/bin/g++",
+            "compilerArgs": [
+                "-std=gnu++11"
+            ],
+            "cStandard": "c11",
+            "cppStandard": "c++11",
+            "intelliSenseMode": "linux-gcc-x64"
+        }
+    ]
+}

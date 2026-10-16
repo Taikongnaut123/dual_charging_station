@@ -1,0 +1,6 @@
+# 继电器控制 (0xF3)
+uint8 relay1
+uint8 relay2
+---
+bool success
+string message

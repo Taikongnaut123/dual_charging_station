@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>mdc_serial</name>
+  <version>1.0.0</version>
+  <description>
+    MDC 充电桩串口节点对外提供的 ROS2 接口（msg/srv 定义）。
+    本副本依据 doc/MDC接口使用指南.md 与 doc/MdcData.msg 复刻，
+    用于让上位机界面程序可以在没有真机的环境下编译与验证。
+    机器人上如果已安装官方 mdc_serial 包，请直接替换本包。
+  </description>
+  <maintainer email="dev@example.com">dev</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <build_depend>rosidl_default_generators</build_depend>
+  <exec_depend>rosidl_default_runtime</exec_depend>
+  <member_of_group>rosidl_interface_packages</member_of_group>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

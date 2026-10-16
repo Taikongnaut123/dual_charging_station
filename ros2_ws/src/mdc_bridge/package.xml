@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>mdc_bridge</name>
+  <version>1.0.0</version>
+  <description>
+    充电桩显示屏与 ROS2 之间的桥：
+    订阅 /mdc_data 转发到界面（UDP JSON），接收界面控制请求并调用 /mdc/* 服务。
+    另含 mdc_fake_pub 假设备，用于无真机时验证整条链路。
+  </description>
+  <maintainer email="dev@example.com">dev</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>mdc_serial</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
