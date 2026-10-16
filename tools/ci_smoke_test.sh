@@ -25,18 +25,28 @@
 #     tools/ci_smoke_test.sh
 #
 #  ── 环境变量 ──
-#     ROS_DISTRO   ROS2 发行版，默认 humble
-#     LOG_DIR      日志目录，默认 build/ci-logs
+#     ROS_DISTRO     ROS2 发行版，默认 humble
+#     LOG_DIR        日志目录，默认 build/ci-logs
+#     APP_BIN        界面程序路径（默认 build/dual_charging_station）
+#     BRIDGE_BIN     桥路径（默认 ros2_ws/install 里那个）
+#     FAKE_BIN       假设备路径（同上）
+#     OVERLAY_SETUP  本工程 colcon install 的 setup.bash；显式设为空字符串则跳过，
+#                    用来验证「打包产物 + 系统 ROS2」这种目标机上的真实情形
 #
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WS="$ROOT/ros2_ws"
-APP="$ROOT/build/dual_charging_station"
-BRIDGE="$WS/install/mdc_bridge/lib/mdc_bridge/mdc_bridge"
-FAKE="$WS/install/mdc_bridge/lib/mdc_bridge/mdc_fake_pub"
 ROS_DISTRO="${ROS_DISTRO:-humble}"
 LOG_DIR="${LOG_DIR:-$ROOT/build/ci-logs}"
+
+# 三个可执行文件的路径都可用环境变量覆盖：
+# CI 里会指向解包后的产物目录，以此验证产物能脱离本工程的构建树独立运行。
+APP="${APP_BIN:-$ROOT/build/dual_charging_station}"
+BRIDGE="${BRIDGE_BIN:-$WS/install/mdc_bridge/lib/mdc_bridge/mdc_bridge}"
+FAKE="${FAKE_BIN:-$WS/install/mdc_bridge/lib/mdc_bridge/mdc_fake_pub}"
+# 注意用 ${VAR-默认} 而不是 ${VAR:-默认}：显式传空字符串表示"不要 source overlay"
+OVERLAY_SETUP="${OVERLAY_SETUP-$WS/install/setup.bash}"
 
 # 桥监听控制指令 / 界面监听状态帧，与 shared/mdc_protocol.h 里的默认值一致
 CMD_PORT=8890
@@ -127,8 +137,12 @@ P2A="$LOG_DIR/phase2-app.log"
 set +u
 # shellcheck disable=SC1090
 source "/opt/ros/$ROS_DISTRO/setup.bash"
-# shellcheck disable=SC1090
-source "$WS/install/setup.bash"
+if [[ -n "$OVERLAY_SETUP" ]]; then
+    # shellcheck disable=SC1090
+    source "$OVERLAY_SETUP"
+else
+    info "跳过本工程 overlay，只用系统 ROS2（模拟目标机上的情形）"
+fi
 set -u
 
 "$FAKE"   >"$P2F" 2>&1 & PIDS+=($!)

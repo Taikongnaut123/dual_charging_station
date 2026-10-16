@@ -339,3 +339,58 @@ QT_QPA_PLATFORM=offscreen ./dual_charging_station --verbose --bridge-host 127.0.
 
 这个参数在现场排障时同样有用：一体屏上没调试器，把输出重定向到文件就能事后追溯。
 
+## 11. 部署到目标机
+
+从 Releases 下载对应架构的包（`latest` 标签，永远是最新一份）：
+
+```bash
+tar -xzf dual_charging_station-linux-arm64.tar.gz
+cd dual_charging_station-linux-arm64
+```
+
+### 包内布局
+
+```
+bin/dual_charging_station   显示屏界面（不依赖 ROS2）
+bin/mdc_bridge              ROS2 桥
+bin/mdc_fake_pub            假设备
+lib/libmdc_serial__*.so     mdc_serial 接口库，桥运行时 dlopen 它们
+run_ui.sh                   起界面
+run_bridge.sh               起桥
+run_fake.sh                 起假设备
+run_demo.sh                 一键起全套：假设备 + 桥 + 界面
+```
+
+### 目标机依赖分两档
+
+| 只跑界面 | 还要跑桥 / 假设备 |
+| --- | --- |
+| `sudo apt install libqt5core5a libqt5gui5 libqt5widgets5 libqt5network5` | 上面那些 **+ ROS2**（必须同发行版，如 `ros-humble-ros-base`） |
+
+**桥是 ROS2 节点，目标机没装 ROS2 就直接跑不起来**（报 `cannot open shared object file`）；
+界面程序不受影响。`run_bridge.sh` / `run_fake.sh` / `run_demo.sh` 会自己 source
+`/opt/ros/<distro>/setup.bash` 并把包内 `lib/` 加进库搜索路径，所以不需要你手动设环境变量；
+ROS 装的不是默认发行版时用 `ROS_DISTRO` 环境变量指定。
+
+### 日常怎么用
+
+```bash
+./run_ui.sh --loopback            # 只有界面，内置仿真数据，连 ROS2 都不用装
+./run_ui.sh                       # 界面连本机的桥
+./run_ui.sh --bridge-host 192.168.1.50   # 桥在机器人上，界面在这块屏上
+./run_demo.sh                     # 无真机：假设备 + 桥 + 界面，验证整条链路
+./run_demo.sh --no-fake           # 真机 mdc_node 已在跑，只起桥 + 界面
+```
+
+一体屏开机自启通常把 `./run_ui.sh -f` 写进 systemd 或 `~/.xinitrc`。
+
+### 关于 `lib/` 里的接口库
+
+`mdc_serial` 是依据 `doc/` 复刻的接口包。桥只**直接**依赖其中的
+`libmdc_serial__rosidl_typesupport_cpp.so`（`ldd` 能看见），但 fastrtps /
+introspection / generator_c 那几个是运行时 `dlopen` 的，`ldd` 看不见——
+所以打包时整套带上，少任何一个都会在启动或首次调用服务时报找不到库。
+
+机器人上如果装有官方 `mdc_serial` 包，**以官方为准**：删掉包内 `lib/`，
+改用机器人上 colcon 构建出的版本即可。
+

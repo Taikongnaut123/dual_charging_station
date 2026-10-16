@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+#
+# 被 run_bridge.sh / run_fake.sh / run_demo.sh 共用：准备好 ROS2 运行环境。
+#
+# 用法（必须先设好 PKG_ROOT）：
+#     PKG_ROOT=/path/to/package source _ros_env.sh
+#
+# 做两件事：
+#   1. source 目标机的 /opt/ros/<distro>/setup.bash
+#      —— 桥是 ROS2 节点，没有 ROS2 环境跑不起来
+#   2. 把产物自带的 lib/ 加到 LD_LIBRARY_PATH
+#      —— mdc_serial 的接口库随包一起发，桥运行时要 dlopen 它们
+
+ROS_DISTRO="${ROS_DISTRO:-humble}"
+
+if [[ ! -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]]; then
+    {
+        echo "找不到 /opt/ros/${ROS_DISTRO}/setup.bash"
+        echo
+        echo "mdc_bridge / mdc_fake_pub 是 ROS2 节点，目标机必须装上 ROS2 ${ROS_DISTRO}。"
+        echo "    sudo apt install ros-${ROS_DISTRO}-ros-base"
+        echo
+        echo "如果只想跑显示屏界面，请用 run_ui.sh —— 它不依赖 ROS2。"
+        echo "（想换发行版可以设 ROS_DISTRO 环境变量）"
+    } >&2
+    exit 1
+fi
+
+# ROS 的 setup.bash 第 8 行就引用了未定义变量 AMENT_TRACE_SETUP_FILES，
+# 开着 -u（nounset）去 source 它必然报 unbound variable 直接退出，
+# 所以只在 source 期间临时关掉 -u。
+set +u
+# shellcheck disable=SC1090
+source "/opt/ros/${ROS_DISTRO}/setup.bash"
+set -u
+
+export LD_LIBRARY_PATH="${PKG_ROOT}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"

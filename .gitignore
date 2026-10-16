@@ -42,6 +42,10 @@ ui_*.h
 CMakeLists.txt.user*
 .qmake.cache
 
+#────────────────────────────────────────────── 打包产物
+# tools/make_package.sh 的输出（CI 与本地打包都走它）
+dist/
+
 #────────────────────────────────────────────── ROS2 / colcon
 # colcon 的三个空间（build/ 上面已覆盖，这里保留 install/ 与 log/）
 install/
