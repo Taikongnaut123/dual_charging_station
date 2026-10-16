@@ -212,6 +212,8 @@ jobs:
                     echo "| 来源分支 | ${GITHUB_REF_NAME} |"
                     echo "| 更新时间 | $(date -u '+%Y-%m-%d %H:%M UTC') |"
                     echo "| 本次覆盖 | ${PKG_NAME}.tar.gz |"
+            echo
+            echo "另一架构的产物不受本次影响，两份始终同时保留在本 Release 里。"
                     echo
                     echo "x86_64 与 arm64 两份产物分别由 build-x86_64.yml 与 build-arm64.yml 上传，各覆盖各的文件。"
                     echo
