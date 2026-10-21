@@ -4,7 +4,8 @@
   <name>mdc_serial</name>
   <version>1.0.0</version>
   <description>
-    MDC 充电桩串口节点对外提供的 ROS2 接口（msg/srv 定义）。
+    充电桩串口节点 mdc_node 对外提供的 ROS2 接口（只有 msg，没有 srv）。
+    协议为只收不发：设备周期上报状态帧，主机仅接收解析，不提供下行控制接口。
     本副本依据 doc/MDC接口使用指南.md 与 doc/MdcData.msg 复刻，
     用于让上位机界面程序可以在没有真机的环境下编译与验证。
     机器人上如果已安装官方 mdc_serial 包，请直接替换本包。
@@ -16,6 +17,9 @@
   <build_depend>rosidl_default_generators</build_depend>
   <exec_depend>rosidl_default_runtime</exec_depend>
   <member_of_group>rosidl_interface_packages</member_of_group>
+
+  <!-- MdcData.msg 的 header 字段用的是 std_msgs/Header -->
+  <depend>std_msgs</depend>
 
   <export>
     <build_type>ament_cmake</build_type>

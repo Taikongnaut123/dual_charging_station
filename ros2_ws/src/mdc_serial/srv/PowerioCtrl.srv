@@ -1,7 +1,0 @@
-# 电源 IO 控制 (0xF2)
-# 注意：ctrl 位掩码 bit0~bit3 -> VO1~VO4，1=关，0=开
-#      （文档明确说明 srv 内注释与节点实际行为相反，此处以指南为准）
-uint8 ctrl
----
-bool success
-string message

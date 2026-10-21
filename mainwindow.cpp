@@ -1,9 +1,7 @@
 #include "mainwindow.h"
 
-#include "pages/controlpage.h"
 #include "pages/overviewpage.h"
-#include "pages/peripheralpage.h"
-#include "pages/powerpage.h"
+#include "pages/stationpage.h"
 #include "theme.h"
 #include "widgets/card.h"
 
@@ -81,9 +79,9 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow() = default;
 
-bool MainWindow::startBridge(quint16 cmdPort, quint16 statPort, const QString &host)
+bool MainWindow::startBridge(quint16 statPort)
 {
-    return m_bridge->start(cmdPort, statPort, host);
+    return m_bridge->start(statPort);
 }
 
 void MainWindow::setLoopbackEnabled(bool on)
@@ -108,16 +106,12 @@ void MainWindow::buildUi()
     root->addWidget(buildHeader());
 
     m_overviewPage = new OverviewPage(m_controller);
-    m_powerPage = new PowerPage(m_controller);
-    m_peripheralPage = new PeripheralPage(m_controller);
-    m_controlPage = new ControlPage(m_controller);
+    m_stationPage = new StationPage(m_controller);
 
     m_tabs = new QTabWidget;
     m_tabs->setObjectName(QStringLiteral("mainTabs"));
     m_tabs->addTab(wrapInScrollArea(m_overviewPage), QStringLiteral("充电总览"));
-    m_tabs->addTab(wrapInScrollArea(m_powerPage), QStringLiteral("电源系统"));
-    m_tabs->addTab(wrapInScrollArea(m_peripheralPage), QStringLiteral("外设与灯光"));
-    m_tabs->addTab(wrapInScrollArea(m_controlPage), QStringLiteral("设备控制"));
+    m_tabs->addTab(wrapInScrollArea(m_stationPage), QStringLiteral("充电桩状态"));
     m_tabs->addTab(buildLogPage(), QStringLiteral("运行日志"));
     root->addWidget(m_tabs, 1);
 
@@ -247,7 +241,7 @@ void MainWindow::setupShortcuts()
     new QShortcut(QKeySequence(Qt::Key_Escape), this, [this]
                   { showNormal(); });
     // 数字键切换页签
-    for (int i = 0; i < 5; ++i)
+    for (int i = 0; i < 3; ++i)
     {
         new QShortcut(QKeySequence(QStringLiteral("Ctrl+%1").arg(i + 1)), this,
                       [this, i]
@@ -290,10 +284,7 @@ void MainWindow::onLinkStateChanged(BridgeClient::LinkState state)
     else
     {
         setPill(m_pillDevice,
-                QStringLiteral("UDP %1 ⇄ %2:%3")
-                    .arg(m_bridge->statusPort())
-                    .arg(m_bridge->bridgeHost())
-                    .arg(m_bridge->commandPort()),
+                QStringLiteral("监听 UDP %1（单向接收）").arg(m_bridge->statusPort()),
                 state == BridgeClient::LinkState::NoBridge ? QStringLiteral("dim")
                                                            : QStringLiteral("info"));
     }
@@ -344,9 +335,8 @@ void MainWindow::updateClock()
     {
         m_footBridge->setText(m_bridge->isLoopbackEnabled()
                                   ? QStringLiteral("环回仿真")
-                                  : QStringLiteral("%1:%2")
-                                        .arg(m_bridge->bridgeHost())
-                                        .arg(m_bridge->commandPort()));
+                                  : QStringLiteral("监听 UDP %1")
+                                        .arg(m_bridge->statusPort()));
     }
     if (m_pillState)
     {

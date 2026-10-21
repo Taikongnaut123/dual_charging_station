@@ -76,16 +76,6 @@ int main(int argc, char *argv[])
     QCommandLineOption loopbackOption(
         QStringLiteral("loopback"),
         QStringLiteral("使用内置仿真数据，不连接 mdc_bridge（开发/演示用）"));
-    QCommandLineOption hostOption(
-        QStringLiteral("bridge-host"),
-        QStringLiteral("mdc_bridge 所在地址"),
-        QStringLiteral("host"),
-        QStringLiteral("127.0.0.1"));
-    QCommandLineOption cmdPortOption(
-        QStringLiteral("cmd-port"),
-        QStringLiteral("mdc_bridge 监听控制指令的 UDP 端口"),
-        QStringLiteral("port"),
-        QString::number(mdcproto::kDefaultCmdPort));
     QCommandLineOption statPortOption(
         QStringLiteral("stat-port"),
         QStringLiteral("本程序接收状态帧的 UDP 端口"),
@@ -99,8 +89,6 @@ int main(int argc, char *argv[])
 
     parser.addOption(fullscreenOption);
     parser.addOption(loopbackOption);
-    parser.addOption(hostOption);
-    parser.addOption(cmdPortOption);
     parser.addOption(statPortOption);
     parser.addOption(verboseOption);
     parser.process(app);
@@ -110,9 +98,8 @@ int main(int argc, char *argv[])
     const bool loopback = parser.isSet(loopbackOption);
     if (!loopback)
     {
-        const quint16 cmdPort = parser.value(cmdPortOption).toUShort();
         const quint16 statPort = parser.value(statPortOption).toUShort();
-        if (!window.startBridge(cmdPort, statPort, parser.value(hostOption)))
+        if (!window.startBridge(statPort))
         {
             // 端口被占用等情况：退回环回模式，至少让界面可用
             qWarning("无法绑定 UDP %u，已退回环回仿真模式", unsigned(statPort));
@@ -149,16 +136,6 @@ int main(int argc, char *argv[])
                                           .arg(BridgeClient::linkStateText(s)));
                          });
 
-        QObject::connect(client, &BridgeClient::commandFinished,
-                         [emitLine](int id, const QString &cmd, bool ok, const QString &msg)
-                         {
-                             emitLine(QStringLiteral("[指令] #%1 %2 -> %3 (%4)")
-                                          .arg(id)
-                                          .arg(cmd)
-                                          .arg(ok ? QStringLiteral("成功") : QStringLiteral("失败"))
-                                          .arg(msg));
-                         });
-
         QObject::connect(client, &BridgeClient::logMessage,
                          [emitLine](int level, const QString &msg)
                          {
@@ -170,12 +147,16 @@ int main(int argc, char *argv[])
         QObject::connect(statTimer, &QTimer::timeout, [emitLine, client]()
                          {
             const MdcData &d = client->lastData();
-            emitLine(QStringLiteral("[统计] 帧=%1 速率=%2Hz 丢帧=%3 链路=%4 电量=%5%")
+            emitLine(QStringLiteral("[统计] 帧=%1 速率=%2Hz 丢帧=%3 链路=%4 "
+                                    "模式=%5 状态=%6 手动SOC=%7% 自动SOC=%8%")
                          .arg(client->frameCount())
                          .arg(client->frameRateHz())
                          .arg(client->lostFrames())
                          .arg(BridgeClient::linkStateText(client->linkState()))
-                         .arg(d.batterySoc)); });
+                         .arg(MdcData::chargeModeText(d.chargeMode))
+                         .arg(MdcData::chargeStateText(d.chargeState))
+                         .arg(d.manualSoc)
+                         .arg(d.autoSoc)); });
         statTimer->start(2000);
     }
 

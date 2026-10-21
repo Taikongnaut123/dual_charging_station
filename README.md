@@ -1,261 +1,264 @@
 # 双轮足机器人充电桩 · 显示屏程序
 
-基于 **Qt 5 Widgets** 的充电桩一体屏人机界面。界面全部使用 `QPainter` 自绘 + Qt 样式表，
-不依赖 QtCharts / QML，方便部署到资源受限的工控屏，也便于按客户要求定制视觉。
+充电桩一体屏上的监控界面：接收下位机上报的充电桩状态，实时显示两个充电口的数据、
+CCU 电机进度和整桩状态。
 
-数据来自下位机的 MDC 控制器（ROS2 Humble），但**本程序不依赖 ROS2**——
-中间隔了一个独立的桥进程，界面可以部署到没有 ROS2 环境的一体屏上。
+> **协议版本：0x12 充电桩状态帧（只收不发）**
+> 充电控制由充电桩主机自主完成，本程序是**纯监控**界面，不提供任何下行控制。
 
 ---
 
 ## 1. 系统架构
 
 ```
-┌──────────────────┐  串口   ┌───────────────────────┐
-│  MDC 控制器       │ ──────► │  mdc_node (ROS2 节点) │
-│  (下位机)         │         │  包 mdc_serial        │
-└──────────────────┘         └───────────┬───────────┘
-                                         │ /mdc_data  10Hz
-                                         │ /mdc/* 5 个 Service
-                                         ▼
-                             ┌───────────────────────┐
-                             │  mdc_bridge           │  ← 本仓库 ros2_ws/
-                             │  订阅→UDP JSON         │
-                             │  UDP→调用 Service      │
-                             └───────────┬───────────┘
-                                         │ UDP JSON
-                                         │ shared/mdc_protocol.h
-                                         ▼
-                             ┌───────────────────────┐
-                             │  dual_charging_station │  ← 本程序（纯 Qt，零 ROS2 依赖）
-                             └───────────────────────┘
+充电桩主机 (MCU)
+   │  UART4，0x12 状态帧，约 500ms 一帧，只收不发
+   ▼
+mdc_node  （ROS2 节点，在机器人/主机侧，不在本工程）
+   │  topic /mdc_data，消息类型 mdc_serial/msg/MdcData
+   │  传输 = DDS，序列化 = rosidl 生成
+   ▼
+mdc_bridge  ◄──「翻译官」：一边一套语言
+   │  收：mdc_serial::msg::MdcData（ROS2 生成的结构体）
+   │  转：逐字段 → JSON，外加封套 {"t":"s","seq":123,"ts":...}
+   ▼
+   │  UDP 单行 JSON，约 400 字节，一包一条
+   ▼
+dual_charging_station  （本程序，纯 Qt）
+   │  MdcData::fromJson() 逐字段 → 界面自己的 MdcData 结构体
+   ▼
+三个页面：充电总览 / 充电桩状态 / 运行日志
 ```
 
-- **上行**：`/mdc_data`（10 Hz）→ 桥序列化成 JSON → UDP → 界面
-- **下行**：界面发 UDP JSON 命令 → 桥调用对应 Service → 应答回传界面
-- 两个构建系统**共用同一份协议头文件** `shared/mdc_protocol.h`，
-  键名只定义一次，避免两端手抄字符串对不上
+**为什么最后一段不用 ROS2 直连？**
+一体屏装不了也不想装 ROS2 + DDS 那一整套。面板只需要"每 500ms 收一包、显示出来"，
+十几行 UDP 代码就够。代价是要自己维护封套、算丢帧、做链路三态判定——换来的是
+界面程序**零 ROS2 依赖**，一个 300 多 KB 的二进制就能跑。
+
+**两个同名但不同的 `MdcData`**：桥里的是 rosidl 从 `.msg` 生成的类型，界面里的是
+`mdcdata.h` 手写的普通结构体。它们分属两个进程、两套构建系统，中间的 UDP JSON
+是唯一的跨界媒介。
 
 ---
 
 ## 2. 快速开始
 
 ```bash
-# ① 构建界面程序
-mkdir -p build && cd build && qmake ../dual_charging_station.pro && make -j$(nproc) && cd ..
+# ① 构建界面程序（qmake）
+mkdir -p build && cd build
+qmake ../dual_charging_station.pro && make -j$(nproc) && cd ..
 
-# ② 构建 ROS2 桥
+# ② 构建 ROS2 桥（colcon）
 source /opt/ros/humble/setup.bash
 cd ros2_ws && colcon build && cd ..
 
-# ③ 一键演示（假设备 + 桥 + 界面）
+# ③ 一键演示：假设备 + 桥 + 界面
 tools/run_demo.sh
+tools/run_demo.sh --loopback   # 只起界面，用内置仿真数据，连 ROS2 都不用装
 ```
 
-三种运行方式：
-
-| 命令 | 场景 |
-| --- | --- |
-| `tools/run_demo.sh` | 假设备 + 桥 + 界面，**无需任何硬件**，可完整体验含控制下发 |
-| `tools/run_demo.sh --no-fake` | 只起桥 + 界面，接真机（假定 `mdc_node` 已在运行） |
-| `tools/run_demo.sh --loopback` | 只起界面，用内置仿真数据，**连 ROS2 都不用装** |
-
-界面程序也可以单独运行：
-
-```bash
-./build/dual_charging_station                     # 连接本机 mdc_bridge（默认 UDP 8890/8891）
-./build/dual_charging_station --loopback          # 内置仿真，不连桥
-./build/dual_charging_station -f                  # 全屏（一体屏实际运行方式）
-./build/dual_charging_station --bridge-host 192.168.1.50 --cmd-port 8890 --stat-port 8891
-```
+没有真机时 `mdc_fake_pub` 会按真实节奏（约 2Hz）模拟"就位 → 手动口充电 → 空闲 →
+自动口充电 → 空闲"的完整循环，用来验证整条链路。
 
 ---
 
 ## 3. 界面
 
-顶部状态栏 + 页签 + 底部信息栏，共 5 页：
+三个页签（`Ctrl+1/2/3` 切换）：
 
 | 页签 | 内容 |
 | --- | --- |
-| **充电总览** | 电池环形表（SOC/电压/充电电流/放电电流/温度）、充电状态大字、**真实充电流程时间轴**、本次充电统计、输出继电器操作、实时曲线（充电电流 + 电池电压 双 Y 轴）、无线充电状态 |
-| **电源系统** | PMC 全部 13 项（总输入、头部/左右腿关节电机、12V 非隔离与隔离 DCDC、报警/紧急）+ 电池 5 项，电压电流带占比条 |
-| **外设与灯光** | 红外 4 管与停车握手/落座指示灯、电源输出 VO1~4、拨码开关、继电器、风扇 4 路 PWM + 温度、LED 三通道与 RGB 原始数据 |
-| **设备控制** | 5 个 Service 的操作面板，每个卡片「先改控件、再点下发」，下发结果显示在卡片底部 |
-| **运行日志** | 带时间戳与分级配色的完整事件日志 |
-
-顶部三颗状态胶囊分别显示：**链路状态 / 桥地址 / 桩状态**。
-底部信息栏显示：桥地址、帧率、丢帧数、累计充电次数与电量、最近一条日志。
+| **充电总览** | 手动口 / 自动口两张卡（SOC 环 + 电压/电流/温度/电池 ID/开关）、整桩概况（模式/状态/本次充电量/已充时长/预计剩余/累计）、双口充电电流曲线 |
+| **充电桩状态** | CCU 电机 6 步进度、连接与充电指示灯（6 个）、原始字段一览（对照 `ros2 topic echo` 排障） |
+| **运行日志** | 链路状态变化、错误与告警，最新在最上 |
 
 ### 链路三态（排障关键）
 
-界面能区分三种"没数据"的原因，不用猜：
+页眉的链路胶囊有三种状态，能直接区分"桥没起来"和"设备没数据"：
 
-| 胶囊显示 | 含义 | 该去查什么 |
+| 状态 | 含义 | 该查什么 |
 | --- | --- | --- |
-| `设备在线` | 正常收到状态帧 | — |
-| `桥在线 · 设备无数据` | 桥活着，但设备没上报 | 串口是否插好、`mdc_node` 是否起来 |
-| `桥未连接` | 连心跳都收不到 | `mdc_bridge` 是否在跑、端口/地址是否对 |
+| **未连接** | 连心跳都收不到 | 桥进程没运行 / 网络不通 / 端口不对 |
+| **桥已连接** | 桥活着，但设备没上报 | 串口没接 / `mdc_node` 没起来 / QoS 不匹配 |
+| **在线** | 正常收到状态帧 | —— |
 
 ---
 
 ## 4. 目录结构
 
 ```
-dual_charging_station/
-├── shared/mdc_protocol.h        # ★ UDP JSON 协议契约（界面与桥共用）
-├── dual_charging_station.pro    # qmake 工程（含 Qt Network）
-├── main.cpp                     # 入口：主题、命令行参数、连接桥
-├── theme.h / theme.cpp          # 全局配色 + 全局样式表（改这里即可换肤）
-├── mdcdata.h                    # MdcData 数据结构（与 MdcData.msg 一一对应）+ JSON 解析
-├── bridgeclient.h/.cpp          # UDP 通道：收发、链路三态、指令应答匹配、看门狗
-├── stationcontroller.h/.cpp     # 状态派生 + 本地统计（替代旧 ChargerController）
-├── mainwindow.h/.cpp            # 主窗口：页签外壳、顶部/底部、日志
-├── pages/                       # 5 个页面
-│   ├── pageutils.h              # 页面共用小工具（kvRow 等）
-│   ├── overviewpage.h/.cpp      # 充电总览
-│   ├── powerpage.h/.cpp         # 电源系统
-│   ├── peripheralpage.h/.cpp    # 外设与灯光
-│   └── controlpage.h/.cpp       # 设备控制
-├── widgets/                     # 自绘控件
-│   ├── card / metrictile        # 卡片容器、数据小格子
-│   ├── circulargauge            # 环形电量表（属性动画 + 流动光点）
-│   ├── chargecurvechart         # 双 Y 轴曲线（序列名可配置）
-│   ├── stagetimeline            # 通用阶段时间轴
-│   ├── lightindicator           # 指示灯行
-│   ├── levelbar                 # 水平量条
-│   └── bytegrid                 # uint8[] 十六进制方格
-├── ros2_ws/                     # ROS2 工作区（colcon）
-│   └── src/
-│       ├── mdc_serial/          # 接口包（msg + 5 个 srv，本地复刻）
-│       └── mdc_bridge/          # 桥节点 + 假设备
-└── tools/run_demo.sh            # 一键启动
+├── main.cpp / mainwindow.*     入口与主窗口（3 页签）
+├── bridgeclient.*              UDP 接收（单向，无发送代码）
+├── mdcdata.h                   界面侧的数据结构（与 MdcData.msg 一一对应）
+├── stationcontroller.*         状态派生 + 本地统计
+├── theme.*                     配色与样式表
+├── shared/
+│   └── mdc_protocol.h          ★ 界面与桥之间的**唯一协议契约**
+├── pages/
+│   ├── pageutils.h             页面小工具
+│   ├── overviewpage.*          充电总览
+│   └── stationpage.*           充电桩状态
+├── widgets/                    自绘控件（卡片/环形表/曲线/时间轴/指示灯/指标块）
+├── ros2_ws/src/
+│   ├── mdc_serial/             ROS2 接口包（只有 msg，本地复刻）
+│   └── mdc_bridge/             桥 + 假设备
+├── tools/
+│   ├── run_demo.sh             开发用一键演示（依赖 build/ 与 install/）
+│   ├── ci_smoke_test.sh        冒烟测试（本地、CI 共用）
+│   ├── make_package.sh         打包成可部署的 tar.gz
+│   └── pack/                   打进包里的启动脚本
+└── doc/                        下位机接口文档（协议来源）
 ```
-
-> `mainwindow.ui` 不再参与编译（界面为纯代码构建），文件保留备查。
 
 ---
 
-## 5. 数据映射（MdcData → 界面）
+## 5. 数据映射（MdcData.msg → JSON → 界面）
 
-`MdcData` 的字段**原样传输、不做换算**（电压 mV、电流 mA），只在显示时换算。
+### 手动 / 自动充电口（各 7 个字段）
 
-| 界面上的 | MdcData 字段 | 换算 |
+| msg 字段 | JSON 键 | 类型 | 单位 | 界面显示 |
+| --- | --- | --- | --- | --- |
+| `manual_chg_switch` | `man_sw` | uint8 | 0/1 | 充电开关：开 / 关 |
+| `manual_battery_id` | `man_bid` | uint8 | — | 电池 ID |
+| `manual_total_voltage` | `man_v` | uint16 | mV | 除以 1000 → V |
+| `manual_charge_current` | `man_ic` | uint16 | **0.1A** | 除以 10 → A |
+| `manual_discharge_current` | `man_dc` | uint16 | **0.1A** | 除以 10 → A |
+| `manual_soc` | `man_soc` | uint16 | % | SOC 环 |
+| `manual_temp` | `man_tmp` | uint16 | ℃ | 电池温度 |
+
+自动口同构，键名换成 `auto_sw` / `auto_bid` / `auto_v` / `auto_ic` / `auto_dc` /
+`auto_soc` / `auto_tmp`。
+
+### 充电桩状态（9 个字段）
+
+| msg 字段 | JSON 键 | 取值 |
 | --- | --- | --- |
-| 环形表 SOC | `battery_soc` | % |
-| 电池总电压 | `battery_total_voltage` | mV ÷ 1000 |
-| 充电 / 放电电流 | `battery_charge_current` / `battery_discharge_current` | mA ÷ 1000 |
-| 电池温度 | `battery_temp` | ℃ |
-| 充电功率 | —— | **本地计算** V × A |
-| 充电中标志 | `ir_bs` | 1 = 充电中 |
-| 停车握手 | `ir_sh` | 1 = 成功 |
-| 机器人落座 | `robot_seated` | 1 = 已落座 |
-| 输出继电器 | `powerio_relay1` / `relay2` | 0/1 |
-| 报警 / 紧急 | `pmc_alarm_status` / `pmc_emergency_status` | 非 0 即异常 |
-| 无线充电 | `wch_request_flag` / `busy` / `result` / `tx_data` / `rx_data` / `update_tick` | result: 0空闲 1处理中 2成功 3失败 |
-| 关节电机 / 12V DCDC | `pmc_head_*` / `pmc_right_*` / `pmc_left_*` / `pmc_nonisolated_*` / `pmc_isolated_current` | mV / mA |
-| 风扇 / LED / 拨码 | `fan*_pwm` / `fan_temp` / `led_*` / `powerio_sw*` | — |
+| `ccu_motor_status` | `ccu_motor` | 1初始化中 2初始化完成 3回零中 4回零完成 5到位中 6到位完成 **0xFE断联 0xFF错误** |
+| `charge_mode` | `chg_mode` | 0待机 1手动 2自动 |
+| `charge_state` | `chg_state` | 0故障 1空闲 2充电中 3充满 |
+| `fan_status` | `fan` | 0关 1开 |
+| `hall_switch` | `hall` | 0未触发 1触发 |
+| `manual_link_status` | `man_link` | 0未连接 1已连接 |
+| `manual_charge_status` | `man_chg` | 0关 1开 |
+| `auto_link_status` | `auto_link` | 0未连接 1已连接 |
+| `auto_charge_status` | `auto_chg` | 0关 1开 |
 
 ### 协议里没有、由本机统计的量
 
-| 界面上的 | 来源 | 说明 |
-| --- | --- | --- |
-| 本次已充电量 | 本地估算 | (当前 SOC − 本次起始 SOC) × 额定容量 |
-| 已充时长 | 本地计时 | 充电期间累加 |
-| 预计剩余 | 本地估算 | 剩余电量 ÷ 当前功率 |
-| 累计充电次数 / 累计电量 | 本地累计 | 会话结束时累加，通过 `QSettings` 持久化 |
+界面上这几项都标注了"本地统计/估算"，**不是设备上报的**：
 
-> 额定容量默认 1.92 kWh（48 V / 40 Ah），在 `StationController::m_packCapacityKwh`
-> 调整，或通过 `QSettings` 的 `config/packCapacityKwh` 配置。
-> 这些量在界面上都没有伪装成设备数据，请勿当成设备上报值使用。
+| 界面项 | 怎么算的 |
+| --- | --- |
+| 本次充电量 | `(当前SOC - 起始SOC)/100 × 额定容量`，默认 1.92 kWh（48V/40Ah，按实际电池组改 `packCapacityKwh`） |
+| 本次已充时长 | 进入"充电中"状态后的累计时长 |
+| 预计剩余 | `(100-SOC)/100 × 容量 ÷ 当前功率` |
+| 累计次数 / 累计电量 | 每次充电结束（离开"充电中"）累加一次，存 `QSettings` |
 
-### 真实充电流程（时间轴）
+### Header 为什么不传
 
-`MdcData` 里**没有**充电阶段字段，时间轴的 5 步是由若干状态位组合派生出来的：
-
-```
-停车检测(任一红外管) → 停车握手(ir_sh) → 机器人落座(robot_seated) → 充电中(ir_bs) → 充电完成
-```
-
-> 早期版本里的「恒流 CC / 恒压 CV / 涓流均衡」是**仿真臆造的阶段**，
-> 真实协议中并不存在，已删除。柜内的 CC/CV 由充电模块自己管，不上报。
+`MdcData.msg` 里的 `std_msgs/Header` 是 ROS2 元数据（`stamp` + `frame_id`）。
+界面只需要"数据什么时候到的"，用封套里的 `ts` 或本地到达时间就够了；`frame_id`
+是固定值 `charge_station`，传过去没有意义。所以 JSON 里省略了整个 header。
 
 ---
 
-## 6. 设备控制（5 个 Service）
+## 6. 为什么没有控制功能
 
-| 卡片 | 桥调用的服务 | 说明 |
-| --- | --- | --- |
-| 输出继电器 | `/mdc/relay_ctrl` | `relay1` / `relay2` 吸合或释放 |
-| 无线充电 | `/mdc/wireless_charge` | 4 字节透传载荷，界面回显 `wch_result` |
-| 风扇 | `/mdc/fan_ctrl` | 4 路 PWM 0~100 |
-| 电源输出通道 | `/mdc/powerio_ctrl` | 位掩码 bit0~3 → VO1~4，**1=关 0=开** |
-| LED 灯效 | `/mdc/led_ctrl` | 三通道模式与亮度 + RGB |
+旧版（0x11 帧）有一套完整的下行链路：界面 → UDP `cmd` → 桥 → ROS2 Service
+（`fan_ctrl` / `relay_ctrl` / `powerio_ctrl` / `wireless_charge` / `led_ctrl`）。
 
-设计取向：**每个卡片都是「先改控件、再点下发」，不做即时下发**。
-工控屏误触代价高，宁可多点一下也不要手滑切掉输出。应答超时 3 秒，
-失败原因（服务不可用 / 超时 / 未知指令）直接显示在卡片底部。
+**新协议取消了下行**。`doc/MDC接口使用指南.md` 明确写着：
 
-> ⚠️ **待硬件确认**：文档没有说明哪一路继电器驱动充电输出。
-> 本页只做透传控制，界面上已标注。请与硬件同事确认 `relay1` / `relay2` 的实际含义，
-> 必要时把总览页的"闭合/断开输出继电器"按钮改成正确的组合。
+> 充电桩 UART4 协议为**只收不发**，充电桩主机周期上报状态帧（类型 `0x12`），
+> RK3588 侧仅接收解析，**不提供任何下行控制 Service**。充电控制由充电桩主机自主完成。
+
+所以 5 个 `.srv`、控制页、以及协议里的 `cmd` / `ack` / `id` 全部删除。
+如果将来协议恢复下行控制，需要重新加：`mdc_serial/srv/`、桥的服务客户端、
+界面的控制页、以及协议里的一套请求-应答字段。
 
 ---
 
 ## 7. 快捷键
 
-| 快捷键 | 作用 |
+| 按键 | 作用 |
 | --- | --- |
-| `F11` / `Esc` | 进入 / 退出全屏 |
-| `Ctrl+1` ~ `Ctrl+5` | 切换页签 |
-| `Ctrl+L` | 切换环回仿真模式（无桥时演示用） |
+| `F11` / `Esc` | 全屏 / 还原 |
+| `Ctrl+1` ~ `Ctrl+3` | 切换页签 |
+| `Ctrl+L` | 切换环回仿真模式 |
 
 ---
 
 ## 8. 接真机
 
-1. 确认下位机侧 `mdc_node` 已运行：`ros2 topic hz /mdc_data` 应约 10 Hz；
-2. 在**同一台机器**上启动桥：`ros2 run mdc_bridge mdc_bridge`；
-3. 启动界面：`./build/dual_charging_station -f`（或 `tools/run_demo.sh --no-fake`）。
-
-跨机部署时，桥与界面可以分别跑在两台机器上：
+### 8.1 前提
 
 ```bash
-# 桥所在机器（默认监听 8890，向 127.0.0.1:8891 发状态）
-ros2 run mdc_bridge mdc_bridge --ros-args -p peer_host:=192.168.1.77 -p peer_port:=8891
-# 界面所在机器
-./dual_charging_station --bridge-host 192.168.1.50
+# 节点在发数据吗？（约 2Hz）
+ros2 topic hz /mdc_data
+
+# 类型和我们的复刻包一致吗？
+ros2 interface show mdc_serial/msg/MdcData
 ```
 
-桥的参数（`--ros-args -p xxx:=yyy`）：
+⚠️ **`ROS_DOMAIN_ID` 必须一致**。接口文档里用的是 **122**：
 
-| 参数 | 默认 | 说明 |
-| --- | --- | --- |
-| `cmd_port` | 8890 | 桥监听控制指令的端口 |
-| `peer_host` / `peer_port` | 127.0.0.1 / 8891 | 状态帧发往哪里；界面先发过指令时会自动学习来源地址 |
-| `topic` | `/mdc_data` | 订阅的话题名 |
+```bash
+export ROS_DOMAIN_ID=122       # 桥和 mdc_node 都要
+```
 
-### 本地复刻的接口包
+`ROS_DOMAIN_ID` 不同时，同一台机器上也是两个隔离的世界——现象是桥收不到数据。
 
-`ros2_ws/src/mdc_serial` 是按 `doc/` 下的文档**本地复刻**的接口包，
-用途是让没有机器人也能编译与验证。
+### 8.2 启动
 
-- `msg/MdcData.msg` —— 照抄 `doc/MdcData.msg`，一致
-- `srv/*.srv` —— 字段名与顺序依据 `doc/MDC接口使用指南.md` 的表格推断，
-  **官方包如果有差异，以官方为准**；替换掉本目录后重新 `colcon build` 即可
+```bash
+# 屏上（或同机）
+./run_bridge.sh                # 桥：订阅 /mdc_data 并转发 UDP
+./run_ui.sh                    # 界面：监听 UDP 8891
+```
+
+桥默认往 `127.0.0.1:8891` 发（因为界面从不回包，桥不需要等界面先说话）。
+跨机时改成界面的地址：
+
+```bash
+./run_bridge.sh --ros-args -p peer_host:=192.168.1.50 -p peer_port:=8891
+```
+
+### 8.3 QoS
+
+桥和假设备都用 `SensorDataQoS()`（BEST_EFFORT）。在 DDS 里 **BEST_EFFORT 订阅者
+与 RELIABLE / BEST_EFFORT 两种发布者都兼容**；而 RELIABLE 订阅者遇到 BEST_EFFORT
+发布者会连不上，且没有明显报错（现象是"一帧都没有"）。设备遥测丢一两帧无所谓，
+兼容性更要紧，所以选了 BEST_EFFORT。
+
+### 8.4 排查顺序
+
+按数据流逐跳验证，别跳步：
+
+```
+① ros2 topic hz /mdc_data          设备在报数吗
+② ros2 topic info /mdc_data --verbose   两边的 QoS / 类型兼容吗
+③ 桥日志 "桥已启动"                 桥起来了吗
+④ ros2 service list | grep mdc      （新协议下应该没有服务，正常）
+⑤ 界面 [统计] 帧在涨 --verbose       UDP 这一跳通了吗
+```
+
+### 8.5 本地复刻的接口包
+
+`ros2_ws/src/mdc_serial` 是依据 `doc/` **复刻**的。机器人上如果装了官方包，
+**以官方为准**：用官方包重新 `colcon build` 桥即可。两边 msg 必须完全一致，
+否则订阅静默失败。
 
 ---
 
 ## 9. 换肤与适配屏幕
 
-- **改配色**：只改 `theme.h` 里的颜色常量，`theme.cpp` 的样式表用 `@TOKEN@`
-  占位符自动套用，不会出现两处色值不一致。
-- **改字号 / 圆角**：同样集中在 `theme.cpp` 的样式表里。
-- **注意**：`CircularGauge` / `ChargeCurveChart` / `StageTimeline` 是自绘控件，
-  **不受样式表影响**，颜色要通过 `setAccent()` 之类的 C++ 接口；它们的取色来自
-  `theme.h` 常量，所以改 `theme.h` 同样能生效。
-- **小屏适配**：三栏宽度用 `setMinimumWidth / setMaximumWidth`，会自动压缩；
-  页面外层包了 `QScrollArea`，高度不够时可以滚动。窗口默认 1400×880，最小 1024×620。
-- **无桌面环境的一体屏**：`QT_QPA_PLATFORM=linuxfb` 或 `eglfs` 直接启动即可。
+- **配色集中在一个地方**：`theme.h` 里的颜色常量；样式表在 `theme.cpp`，
+  用 `@TOKEN@` 占位符替换。改配色只动这两个文件。
+- **自绘控件不受样式表影响**：`CircularGauge` / `ChargeCurveChart` /
+  `StageTimeline` / `LightIndicator` / `LevelBar` 的取色来自 `theme.h` 常量，
+  要走 `setAccent()` 之类的 C++ 接口。
+- **小屏适配**：三栏宽度用 `setMinimumWidth / setMaximumWidth`，页面外层包了
+  `QScrollArea`，高度不够时可滚动。窗口默认 1400×880，最小 1024×620。
 
 ```bash
 # 例：1024x600 工控屏全屏运行
@@ -264,7 +267,7 @@ QT_QPA_PLATFORM=linuxfb ./dual_charging_station -f
 
 ### 工控板上的 libGL 报错（可忽略）
 
-在 RK3588 这类板子上启动时，终端可能刷这几行：
+在 RK3588 这类板子上启动时，终端可能刷：
 
 ```
 libGL error: glx: failed to create dri3 screen
@@ -272,16 +275,13 @@ libGL error: failed to load driver: rockchip
 ```
 
 这是 Qt 的 xcb 平台插件在探测 GLX 集成时，板卡厂商的 GPU 驱动不全导致的，
-**与本程序无关，也不影响显示**：界面全部由 `QPainter` 光栅绘制，一行 OpenGL 都不用，
-探测失败后 Qt 自动走软件路径，窗口照常显示。
+**与本程序无关，也不影响显示**：界面全部由 `QPainter` 光栅绘制，一行 OpenGL 都不用。
 
-程序启动时已经自动把 `QT_XCB_GL_INTEGRATION` 置为 `none`（在 `QApplication` 构造之前，
-见 `main.cpp`），让 xcb 干脆不加载 GLX 集成插件，从根上不产生这些报错。
-这个默认值只在外部没指定时才生效，需要用回 GLX 时用环境变量覆盖即可：
+程序启动时已自动把 `QT_XCB_GL_INTEGRATION` 置为 `none`（在 `QApplication` 构造
+之前，见 `main.cpp`）。该默认值只在外部未指定时生效，需要时可改回
+`QT_XCB_GL_INTEGRATION=xcb_glx`。
 
-```bash
-QT_XCB_GL_INTEGRATION=xcb_glx ./dual_charging_station
-```
+---
 
 ## 10. 持续集成（GitHub Actions）
 
@@ -292,63 +292,48 @@ QT_XCB_GL_INTEGRATION=xcb_glx ./dual_charging_station
 | `.github/workflows/build-x86_64.yml` | `ubuntu-22.04` | `dual_charging_station-linux-x86_64.tar.gz` |
 | `.github/workflows/build-arm64.yml` | `ubuntu-22.04-arm` | `dual_charging_station-linux-arm64.tar.gz` |
 
-**触发方式**：push 到 `master`，或在 Actions 页面手动触发（`workflow_dispatch`）。
-
-**每个工作流做的事**：
-
-1. 装 Qt5 + ROS2 Humble
-2. `qmake` 编界面程序，`colcon` 编桥（`mdc_bridge` + `mdc_fake_pub`）
-3. 校验产物架构与动态库（防止编成主机架构、防止缺库）
-4. 跑冒烟测试 `tools/ci_smoke_test.sh`
-5. 打包 tar.gz + sha256，上传到滚动 Release
+**触发**：push 到 `master`，或在 Actions 页面手动触发。
 
 **产物管理：不做版本管理。** 两份产物都挂在固定 tag `latest` 的同一个 Release 上，
-同名文件直接覆盖（`gh release upload --clobber`），所以 Releases 页面永远只有一份最新的，
-下载地址固定不变，不保留历史版本。两个架构的文件名不同，各覆盖各的；两个工作流
-用同一个 `concurrency` 组串行执行，避免同时改 Release 打架。
+同名文件直接覆盖（`gh release upload --clobber`），Releases 页面永远只有一份最新的，
+下载地址固定不变。
 
-**为什么两个架构都用 22.04**：ROS2 Humble 官方只支持 Ubuntu 22.04；更重要的是 glibc 基线 ——
-在 24.04（glibc 2.39）上编出来的二进制，拿到跑 22.04（glibc 2.35）的一体屏上会直接报
-`GLIBC_2.38 not found`。arm64 用的是 GitHub 的 arm64 原生运行器（`ubuntu-22.04-arm`，
-公开仓库免费不限量），是真 aarch64 机器而不是 QEMU 模拟，所以编译速度和 x86 一样正常。
+**为什么两个架构都用 22.04**：ROS2 Humble 只支持 22.04；且 24.04（glibc 2.39）
+编出来的二进制在 22.04 目标机上会报 `GLIBC_2.38 not found`。arm64 用的是 GitHub 的
+arm64 原生运行器（真 aarch64 机器，不是 QEMU 模拟）。
 
 ### 冒烟测试 `tools/ci_smoke_test.sh`
 
-CI 里不只验证"编过了"，而是真的跑一遍。本地也能跑，用来复现 CI 的检查：
+CI 里不只验证"编过了"，而是真的跑一遍。本地也能跑：
 
 ```bash
 tools/ci_smoke_test.sh
 ```
 
-三个阶段，任一失败即返回非 0：
-
 | 阶段 | 做什么 | 证明了什么 |
 | --- | --- | --- |
-| 1 | 无头启动界面（环回模式，跑 8 秒） | 二进制能启动、5 个页面都能构造、事件循环在跑 |
-| 2 | 假设备 → 桥 → UDP → 界面 | 界面确实收到了 10Hz 数据流，而不是"只是没崩" |
-| 3 | 模拟界面下发 5 条控制指令 | UDP → 桥 → ROS2 服务 这一向也通，假设备收到了正确参数 |
+| 1 | 无头启动界面（环回模式 8 秒） | 二进制能启动、3 个页面都能构造、事件循环在跑 |
+| 2 | 假设备 → 桥 → UDP → 界面 | 界面确实收到了约 2Hz 数据流，SOC 解析正确 |
+| 3 | 另起一个桥发到 8892，python 逐项核对 | 26 个协议字段一个不少、一个不多 |
 
-无头运行靠 `QT_QPA_PLATFORM=offscreen`（CI 里没有显示器）。界面新增了 `--verbose`
-参数，把链路状态与帧数打到标准输出，脚本据此判断"真的收到数据了"：
+阶段 3 能抓住"加了字段但桥上忘了序列化"这类静默 bug——字段名对了但值不传，界面
+只会显示 0，不报任何错。
 
-```bash
-QT_QPA_PLATFORM=offscreen ./dual_charging_station --verbose --bridge-host 127.0.0.1
-# [链路] 在线
-# [统计] 帧=119 速率=10Hz 丢帧=0 链路=在线 电量=39%
-```
+### 产物自包含
 
-这个参数在现场排障时同样有用：一体屏上没调试器，把输出重定向到文件就能事后追溯。
+`mdc_bridge` 运行时 `dlopen` 若干 `mdc_serial` 接口库（fastrtps / introspection /
+generator_c），`ldd` 看不到它们。打包时整套带上（`lib/`），并给两个可执行文件链了
+`RPATH=$ORIGIN/../lib`。
+
+⚠️ 必须带 `-Wl,--disable-new-dtags`：默认链出的是 `DT_RUNPATH`，而 **`DT_RUNPATH`
+对 `dlopen` 无效**，那几个运行时加载的库照样找不到。详见
+`ros2_ws/src/mdc_bridge/CMakeLists.txt` 的注释，**不要删那行**。
+
+---
 
 ## 11. 部署到目标机
 
-从 Releases 下载对应架构的包（`latest` 标签，永远是最新一份）：
-
-```bash
-tar -xzf dual_charging_station-linux-arm64.tar.gz
-cd dual_charging_station-linux-arm64
-```
-
-### 包内布局
+从 Releases 下载对应架构的包（`latest` 标签），解包后：
 
 ```
 bin/dual_charging_station   显示屏界面（不依赖 ROS2）
@@ -358,7 +343,7 @@ lib/libmdc_serial__*.so     mdc_serial 接口库，桥运行时 dlopen 它们
 run_ui.sh                   起界面
 run_bridge.sh               起桥
 run_fake.sh                 起假设备
-run_demo.sh                 一键起全套：假设备 + 桥 + 界面
+run_demo.sh                 一键起全套
 ```
 
 ### 目标机依赖分两档
@@ -367,37 +352,26 @@ run_demo.sh                 一键起全套：假设备 + 桥 + 界面
 | --- | --- |
 | `sudo apt install libqt5core5a libqt5gui5 libqt5widgets5 libqt5network5` | 上面那些 **+ ROS2**（必须同发行版，如 `ros-humble-ros-base`） |
 
-**桥是 ROS2 节点，目标机没装 ROS2 就直接跑不起来**（报 `cannot open shared object file`）；
-界面程序不受影响。`run_bridge.sh` / `run_fake.sh` / `run_demo.sh` 会自己 source
-`/opt/ros/<distro>/setup.bash` 并把包内 `lib/` 加进库搜索路径，所以不需要你手动设环境变量；
-ROS 装的不是默认发行版时用 `ROS_DISTRO` 环境变量指定。
+**桥是 ROS2 节点，目标机没装 ROS2 就直接跑不起来**；界面程序不受影响。
 
 ### 日常怎么用
 
 ```bash
-./run_ui.sh --loopback            # 只有界面，内置仿真数据，连 ROS2 都不用装
-./run_ui.sh                       # 界面连本机的桥
-./run_ui.sh --bridge-host 192.168.1.50   # 桥在机器人上，界面在这块屏上
-./run_demo.sh                     # 无真机：假设备 + 桥 + 界面，验证整条链路
-./run_demo.sh --no-fake           # 真机 mdc_node 已在跑，只起桥 + 界面
+./run_ui.sh --loopback        # 只有界面，内置仿真数据，连 ROS2 都不用装
+./run_ui.sh                   # 界面监听本机 UDP 8891
+./run_demo.sh                 # 无真机：假设备 + 桥 + 界面
+./run_demo.sh --no-fake       # 真机 mdc_node 已在跑，只起桥 + 界面
 ```
 
 一体屏开机自启通常把 `./run_ui.sh -f` 写进 systemd 或 `~/.xinitrc`。
 
-### 关于 `lib/` 里的接口库
+### 端口
 
-`mdc_serial` 是依据 `doc/` 复刻的接口包。桥只**直接**依赖其中的
-`libmdc_serial__rosidl_typesupport_cpp.so`（`ldd` 能看见），但 fastrtps /
-introspection / generator_c 那几个是运行时 `dlopen` 的，`ldd` 看不见——
-所以打包时整套带上，少任何一个都会在启动或首次调用服务时报找不到库。
+只有一个端口需要关心：**界面的 `--stat-port`（默认 8891）**。
 
-为了让 `./bin/mdc_bridge` 直接敲就能跑（不必依赖启动脚本设环境变量），
-两个可执行文件都链了 `RPATH=$ORIGIN/../lib`，见 `ros2_ws/src/mdc_bridge/CMakeLists.txt`。
-注意那里必须带 `-Wl,--disable-new-dtags`：默认链出的是 `DT_RUNPATH`，
-而 `DT_RUNPATH` **对 dlopen 无效**，上面那几个运行时加载的库照样找不到，
-报错会变成 `Could not load library libmdc_serial__rosidl_typesupport_fastrtps_cpp.so`。
-换成传统 `DT_RPATH` 才会被继承并对 dlopen 生效，**不要删掉这行**。
+```bash
+./dual_charging_station --stat-port 9001     # 换端口
+./run_bridge.sh --ros-args -p peer_port:=9001  # 桥必须发到同一端口
+```
 
-机器人上如果装有官方 `mdc_serial` 包，**以官方为准**：删掉包内 `lib/`，
-改用机器人上 colcon 构建出的版本即可。
-
+改了一边不改另一边，现象是**界面永远 0 帧**（数据发到 8891 去了，没人接）。

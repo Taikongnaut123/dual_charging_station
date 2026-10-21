@@ -5,8 +5,8 @@
 namespace
 {
 
-    constexpr int kCurveMaxPoints = 180; // 曲线保留点数
-    constexpr int kCurveKeepEvery = 2;   // 每 N 帧采一个点（10Hz / 2 = 5Hz）
+    constexpr int kCurveMaxPoints = 180; // 曲线保留点数（2Hz x 180 = 90 秒窗口）
+    constexpr int kCurveKeepEvery = 1;   // 每帧都采（设备本身就是 2Hz）
 
 } // namespace
 
@@ -27,11 +27,11 @@ StationController::~StationController()
     saveStatistics();
 }
 
-QStringList StationController::stageLabels()
+QStringList StationController::ccuStageLabels()
 {
-    return QStringList{QStringLiteral("停车检测"), QStringLiteral("停车握手"),
-                       QStringLiteral("机器人落座"), QStringLiteral("充电中"),
-                       QStringLiteral("充电完成")};
+    return QStringList{QStringLiteral("初始化中"), QStringLiteral("初始化完成"),
+                       QStringLiteral("回零中"), QStringLiteral("回零完成"),
+                       QStringLiteral("到位中"), QStringLiteral("到位完成")};
 }
 
 QString StationController::stateText(State s)
@@ -40,22 +40,14 @@ QString StationController::stateText(State s)
     {
     case State::Offline:
         return QStringLiteral("无数据");
-    case State::Waiting:
-        return QStringLiteral("等待机器人");
-    case State::Detecting:
-        return QStringLiteral("停车检测中");
-    case State::Handshaked:
-        return QStringLiteral("握手成功");
-    case State::Ready:
-        return QStringLiteral("已就位");
+    case State::Fault:
+        return QStringLiteral("充电桩故障");
+    case State::Idle:
+        return QStringLiteral("空闲");
     case State::Charging:
         return QStringLiteral("充电中");
-    case State::Completed:
-        return QStringLiteral("充电完成");
-    case State::Alarm:
-        return QStringLiteral("报警");
-    case State::Emergency:
-        return QStringLiteral("紧急停止");
+    case State::Full:
+        return QStringLiteral("已充满");
     }
     return QStringLiteral("未知");
 }
@@ -74,6 +66,21 @@ QString StationController::formatDuration(int seconds)
     return QStringLiteral("%1 秒").arg(s);
 }
 
+int StationController::activePort() const
+{
+    if (m_data.manualCharging() || m_data.manualLinked())
+        return 1;
+    if (m_data.autoCharging() || m_data.autoLinked())
+        return 2;
+
+    // 都还没连上时，用充电模式兜底
+    if (m_data.chargeMode == 1)
+        return 1;
+    if (m_data.chargeMode == 2)
+        return 2;
+    return 0;
+}
+
 // ------------------------------------------------------------------ 数据入口
 
 void StationController::onData(const MdcData &d)
@@ -82,7 +89,7 @@ void StationController::onData(const MdcData &d)
     m_hasData = true;
 
     evaluateState(d);
-    updateStage(d);
+    updateCcuStage(d);
     integrate(d);
 
     emit dataChanged(m_data);
@@ -110,48 +117,29 @@ void StationController::evaluateState(const MdcData &d)
 {
     const State before = m_state;
 
-    State next = m_state;
-    m_stageFaulted = false;
-
+    State next;
     if (!m_hasData)
     {
         next = State::Offline;
     }
-    else if (d.emergency())
-    {
-        next = State::Emergency;
-        m_stageFaulted = true;
-    }
-    else if (d.alarm())
-    {
-        next = State::Alarm;
-        m_stageFaulted = true;
-    }
-    else if (d.charging())
-    {
-        next = State::Charging;
-        m_hadChargeThisVisit = true;
-    }
-    else if (m_hadChargeThisVisit && d.seated())
-    {
-        next = State::Completed; // 充完电但机器人还没走
-    }
-    else if (d.seated())
-    {
-        next = State::Ready;
-    }
-    else if (d.handshaked())
-    {
-        next = State::Handshaked;
-    }
-    else if (d.anyIrBlocked())
-    {
-        next = State::Detecting;
-    }
     else
     {
-        next = State::Waiting;
-        m_hadChargeThisVisit = false; // 离开充电位，拜访结束
+        switch (d.chargeState)
+        {
+        case 0:
+            next = State::Fault;
+            break;
+        case 2:
+            next = State::Charging;
+            break;
+        case 3:
+            next = State::Full;
+            break;
+        case 1:
+        default:
+            next = State::Idle;
+            break;
+        }
     }
 
     // 会话开始/结束判定
@@ -167,69 +155,47 @@ void StationController::evaluateState(const MdcData &d)
     }
 }
 
-void StationController::updateStage(const MdcData &d)
+void StationController::updateCcuStage(const MdcData &d)
 {
-    int current = -1;
+    const int beforeCurrent = m_ccuStageCurrent;
+    const int beforeReached = m_ccuStageReached;
+    const bool beforeFaulted = m_ccuFaulted;
+
+    m_ccuFaulted = d.ccuFault();
+
     if (!m_hasData)
     {
-        current = -1;
+        m_ccuStageCurrent = -1;
+        m_ccuStageReached = -1;
     }
-    else if (m_stageFaulted)
+    else if (m_ccuFaulted)
     {
-        current = -2; // 故障：保留已到达的进度但标红
+        m_ccuStageCurrent = -2; // 断联/错误：保留已到达的进度但标红
     }
-    else if (d.charging())
+    else if (d.ccuMotorStatus >= 1 && d.ccuMotorStatus <= 6)
     {
-        current = 3;
-    }
-    else if (m_hadChargeThisVisit && d.seated())
-    {
-        current = 4;
-    }
-    else if (d.seated())
-    {
-        current = 2;
-    }
-    else if (d.handshaked())
-    {
-        current = 1;
-    }
-    else if (d.anyIrBlocked())
-    {
-        current = 0;
-    }
-
-    const int beforeCurrent = m_stageCurrent;
-    const int beforeReached = m_stageReached;
-    const bool beforeFaulted = m_stageFaulted;
-
-    if (current == -1)
-    {
-        m_stageCurrent = -1;
-        m_stageReached = -1;
-    }
-    else if (current == -2)
-    {
-        m_stageCurrent = -2;
+        m_ccuStageCurrent = d.ccuMotorStatus - 1;
+        m_ccuStageReached = qMax(m_ccuStageReached, m_ccuStageCurrent);
     }
     else
     {
-        m_stageCurrent = current;
-        m_stageReached = qMax(m_stageReached, current);
+        m_ccuStageCurrent = -1; // 0 或未知值：不显示进度
     }
 
-    if (beforeCurrent != m_stageCurrent || beforeReached != m_stageReached || beforeFaulted != m_stageFaulted)
-        emit stageChanged();
+    if (beforeCurrent != m_ccuStageCurrent || beforeReached != m_ccuStageReached ||
+        beforeFaulted != m_ccuFaulted)
+        emit ccuStageChanged();
 }
 
 // ------------------------------------------------------------------ 本地统计
 
 void StationController::startSession()
 {
+    m_sessionPort = activePort();
     m_sessionEnergyKwh = 0.0;
     m_sessionSeconds = 0;
     m_sessionSecondsAcc = 0.0;
-    m_sessionStartSoc = m_data.batterySoc;
+    m_sessionStartSoc = (m_sessionPort == 2) ? m_data.autoSoc : m_data.manualSoc;
     m_curve.clear();
     m_curveDivider = 0;
     m_lastIntegrateMs = m_clock.elapsed();
@@ -254,31 +220,32 @@ void StationController::integrate(const MdcData &d)
     const qint64 now = m_clock.elapsed();
     double dt = (now - m_lastIntegrateMs) / 1000.0;
     m_lastIntegrateMs = now;
-    if (dt <= 0.0 || dt > 2.0)
-        dt = 0.1; // 异常间隔（首次/卡顿）按一帧处理
+    if (dt <= 0.0 || dt > 5.0)
+        dt = 0.5; // 异常间隔（首次/卡顿）按一帧处理
 
     if (d.charging())
     {
-        // 环回模式把 60 秒仿真成一个完整充电周期，时间指标需要按同一比例缩放，
-        // 否则"已充时长"只有几十秒、而"预计剩余"算出来是几十分钟，自相矛盾。
+        // 环回模式把 40 秒仿真成一个完整充电周期，时间指标需要按同一比例缩放，
+        // 否则"已充时长"只有十几秒、而"预计剩余"算出来是几十分钟，自相矛盾。
         const double timeScale = m_client->isLoopbackEnabled() ? 60.0 : 1.0;
         m_sessionSecondsAcc += dt * timeScale;
         m_sessionSeconds = int(m_sessionSecondsAcc);
 
         // 充电量用 SOC 增量×额定容量估算：不依赖墙钟时间，
         // 与显示的 SOC、剩余时间用的是同一套容量模型，三者自洽。
-        const double delta = (d.batterySoc - m_sessionStartSoc) / 100.0 * m_packCapacityKwh;
+        const double soc = (m_sessionPort == 2) ? d.autoSoc : d.manualSoc;
+        const double delta = (soc - m_sessionStartSoc) / 100.0 * m_packCapacityKwh;
         m_sessionEnergyKwh = qMax(0.0, delta);
     }
 
-    // 曲线：降采样后入队，避免 10Hz 打满
+    // 曲线：两个口的充电电流（A）
     if (++m_curveDivider >= kCurveKeepEvery)
     {
         m_curveDivider = 0;
         CurvePoint p;
         p.time = QDateTime::currentDateTime();
-        p.currentA = d.chargeCurrentA();
-        p.voltageV = d.voltageV();
+        p.manualA = d.manualChargeCurrentA();
+        p.autoA = d.autoChargeCurrentA();
         m_curve.append(p);
         while (m_curve.size() > kCurveMaxPoints)
             m_curve.remove(0);
@@ -287,10 +254,16 @@ void StationController::integrate(const MdcData &d)
 
 int StationController::remainingSeconds() const
 {
-    const double power = m_data.chargePowerKw();
-    if (!m_data.charging() || power < 0.05)
+    const int port = activePort();
+    if (!m_data.charging() || port == 0)
         return -1;
-    const double need = (100.0 - m_data.batterySoc) / 100.0 * m_packCapacityKwh;
+
+    const double soc = (port == 2) ? m_data.autoSoc : m_data.manualSoc;
+    const double power = (port == 2) ? m_data.autoChargePowerKw() : m_data.manualChargePowerKw();
+    if (power < 0.05)
+        return -1;
+
+    const double need = (100.0 - soc) / 100.0 * m_packCapacityKwh;
     return int(need / power * 3600.0);
 }
 
@@ -315,16 +288,4 @@ void StationController::resetStatistics()
     m_totalEnergyKwh = 0.0;
     saveStatistics();
     emit statisticsChanged();
-}
-
-// ------------------------------------------------------------------ 控制
-
-void StationController::closeOutputRelay()
-{
-    m_client->sendRelay(1, 1);
-}
-
-void StationController::openOutputRelay()
-{
-    m_client->sendRelay(0, 0);
 }

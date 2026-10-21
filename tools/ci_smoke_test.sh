@@ -7,13 +7,17 @@
 #  三个阶段，任一失败 → 退出码 1：
 #
 #    阶段 1  无头启动界面（环回模式）
-#            证明：二进制能启动、5 个页面都能构造、事件循环在跑、定时器在跳
+#            证明：二进制能启动、三个页面都能构造、事件循环在跑
 #
 #    阶段 2  假设备 → 桥 → UDP → 界面  全链路
-#            证明：界面确实收到了 10Hz 真实数据流，而不是"只是没崩"
+#            证明：界面确实收到了约 2Hz 的真实数据流，而不是"只是没崩"
 #
-#    阶段 3  模拟界面下发 5 条控制指令
-#            证明：UDP → 桥 → ROS2 服务 这一向也通，且假设备收到了正确参数
+#    阶段 3  协议字段完整性校验
+#            另起一个桥把状态帧发到 8892，用 python 逐项核对
+#            shared/mdc_protocol.h 里定义的键是否一个不少、一个不多
+#            —— 能抓住"加了字段但桥上忘了序列化"这类静默 bug
+#
+#  协议是**只收不发**（充电桩主机自主完成充电控制），所以没有下发类测试。
 #
 #  无头运行靠 QT_QPA_PLATFORM=offscreen —— CI 里没有显示器，一体屏上也没有
 #  调试器，所以这个开关同时也是现场排障用的。
@@ -48,9 +52,10 @@ FAKE="${FAKE_BIN:-$WS/install/mdc_bridge/lib/mdc_bridge/mdc_fake_pub}"
 # 注意用 ${VAR-默认} 而不是 ${VAR:-默认}：显式传空字符串表示"不要 source overlay"
 OVERLAY_SETUP="${OVERLAY_SETUP-$WS/install/setup.bash}"
 
-# 桥监听控制指令 / 界面监听状态帧，与 shared/mdc_protocol.h 里的默认值一致
-CMD_PORT=8890
+# 界面监听状态帧的端口（与 shared/mdc_protocol.h 的 kDefaultStatPort 一致）
 STAT_PORT=8891
+# 阶段 3 用的独立端口，避免和界面抢 8891
+PROBE_PORT=8892
 
 export QT_QPA_PLATFORM=offscreen
 mkdir -p "$LOG_DIR"
@@ -138,10 +143,10 @@ set +u
 # shellcheck disable=SC1090
 source "/opt/ros/$ROS_DISTRO/setup.bash"
 if [[ -n "$OVERLAY_SETUP" ]]; then
-    # shellcheck disable=SC1090
-    source "$OVERLAY_SETUP"
+  # shellcheck disable=SC1090
+  source "$OVERLAY_SETUP"
 else
-    info "跳过本工程 overlay，只用系统 ROS2（模拟目标机上的情形）"
+  info "跳过本工程 overlay，只用系统 ROS2（模拟目标机上的情形）"
 fi
 set -u
 
@@ -175,16 +180,17 @@ else
   FRAMES="$(sed -n 's/^\[统计\] 帧=\([0-9]*\).*/\1/p' <<<"$LAST_STAT")"
   RATE="$(sed -n 's/^\[统计\] .*速率=\([0-9]*\)Hz.*/\1/p' <<<"$LAST_STAT")"
 
-  if [[ "${FRAMES:-0}" -ge 30 ]]; then
-    pass "界面 12 秒内收到 ${FRAMES} 帧（假设备按 10Hz 上报，阈值 ≥30 通过）"
+  # 设备约 2Hz，12 秒理论上是 24 帧；留足余量
+  if [[ "${FRAMES:-0}" -ge 10 ]]; then
+    pass "界面 12 秒内收到 ${FRAMES} 帧（设备约 2Hz，阈值 ≥10 帧通过）"
   else
     fail "界面只收到 ${FRAMES:-0} 帧，链路没打通"
     dump "$P2A"
     dump "$P2B"
   fi
 
-  if [[ "${RATE:-0}" -ge 5 ]]; then
-    pass "帧率 ${RATE}Hz（阈值 ≥5Hz 通过）"
+  if [[ "${RATE:-0}" -ge 1 ]]; then
+    pass "帧率 ${RATE}Hz（阈值 ≥1Hz 通过）"
   else
     fail "帧率只有 ${RATE:-0}Hz，数据不连续"
   fi
@@ -194,103 +200,95 @@ else
   else
     fail "界面链路状态不是「在线」：$LAST_STAT"
   fi
+
+  # 数据真的被解析了吗？SOC 应该在 1~100，状态文本应该是已知取值
+  MSOC="$(sed -n 's/^.*手动SOC=\([0-9]*\)%.*/\1/p' <<<"$LAST_STAT")"
+  ASOC="$(sed -n 's/^.*自动SOC=\([0-9]*\)%.*/\1/p' <<<"$LAST_STAT")"
+  if [[ "${MSOC:-0}" -ge 1 && "${MSOC:-0}" -le 100 && "${ASOC:-0}" -ge 1 && "${ASOC:-0}" -le 100 ]]; then
+    pass "SOC 解析正常（手动 ${MSOC}% / 自动 ${ASOC}%）"
+  else
+    fail "SOC 数值不合理（手动 ${MSOC:-空} / 自动 ${ASOC:-空}），解析可能有问题"
+    dump "$P2A"
+  fi
 fi
 
 # ============================================================ 阶段 3
-step "阶段 3／3　模拟界面下发 5 条控制指令（UDP → 桥 → ROS2 服务）"
+step "阶段 3／3　协议字段完整性校验（对照 shared/mdc_protocol.h）"
 
-P3="$LOG_DIR/phase3-send.log"
+P3="$LOG_DIR/phase3-probe.log"
+P3B="$LOG_DIR/phase3-bridge.log"
 
-python3 - "$CMD_PORT" <<'PY' >"$P3" 2>&1
+# 另起一个桥把状态帧发到 8892（不干扰界面占着的 8891），
+# 用 python 收一帧，逐项核对键名是否一个不少、一个不多。
+python3 - "$PROBE_PORT" <<'PY' >"$P3" 2>&1 &
 import json
 import socket
 import sys
-import time
 
 port = int(sys.argv[1])
 
-# 报文格式见 shared/mdc_protocol.h：
-#   下行  {"t":"c","id":1,"cmd":"relay","relay1":1,"relay2":0}
-#   应答  {"t":"ack","id":1,"cmd":"relay","ok":true,"msg":"..."}
-cmds = [
-    (1, "relay",   {"relay1": 1, "relay2": 0}),
-    (2, "fan",     {"fan1": 128, "fan2": 64, "fan3": 0, "fan4": 0}),
-    (3, "powerio", {"ctrl": 15}),
-    (4, "wch",     {"payload": [1, 54, 1, 1]}),
-    (5, "led",     {"ch1_mode": 1, "ch1_duty": 100,
-                    "ch2_mode": 1, "ch2_duty": 50,
-                    "ch3_mode": 1, "ch3_duty": 25,
-                    "rgb_mode": 1, "r_duty": 255, "g_duty": 0, "b_duty": 128}),
+# 与 shared/mdc_protocol.h 一一对应（t/seq/ts + 21 个数据字段）
+expect = [
+    "t", "seq", "ts",
+    "man_sw", "man_bid", "man_v", "man_ic", "man_dc", "man_soc", "man_tmp",
+    "auto_sw", "auto_bid", "auto_v", "auto_ic", "auto_dc", "auto_soc", "auto_tmp",
+    "ccu_motor", "chg_mode", "chg_state", "fan", "hall",
+    "man_link", "man_chg", "auto_link", "auto_chg",
 ]
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.settimeout(5.0)
+sock.bind(("127.0.0.1", port))
+sock.settimeout(8.0)
 
-pending = {}
-for cid, name, args in cmds:
-    pkt = {"t": "c", "id": cid, "cmd": name}
-    pkt.update(args)
-    sock.sendto(json.dumps(pkt).encode("utf-8"), ("127.0.0.1", port))
-    pending[cid] = name
-    print("发送 #%d %s %s" % (cid, name, json.dumps(args, ensure_ascii=False)))
-    time.sleep(0.3)
+frame = None
+try:
+    while frame is None:
+        raw, _ = sock.recvfrom(4096)
+        obj = json.loads(raw.decode("utf-8"))
+        if obj.get("t") == "s":
+            frame = (obj, raw)
+except socket.timeout:
+    print("超时：8 秒内没收到状态帧")
+    sys.exit(1)
+except ValueError as exc:
+    print("收到无法解析的报文：%s" % exc)
+    sys.exit(1)
 
-ok_count = 0
-deadline = time.time() + 15
-while pending and time.time() < deadline:
-    try:
-        data, _ = sock.recvfrom(4096)
-    except socket.timeout:
-        break
-    try:
-        msg = json.loads(data.decode("utf-8"))
-    except ValueError:
-        continue
-    if msg.get("t") != "ack":
-        continue
-    cid = msg.get("id")
-    if cid not in pending:
-        continue
-    name = pending.pop(cid)
-    ok = bool(msg.get("ok"))
-    ok_count += 1 if ok else 0
-    print("应答 #%d %s -> %s (%s)" % (cid, name, "成功" if ok else "失败", msg.get("msg")))
+obj, raw = frame
+print("收到状态帧，共 %d 个字段：" % len(obj))
+print(raw.decode("utf-8"))
 
-for cid, name in sorted(pending.items()):
-    print("应答 #%d %s -> 超时未收到" % (cid, name))
+missing = [k for k in expect if k not in obj]
+extra = [k for k in obj if k not in expect]
 
-print("成功 %d/%d" % (ok_count, len(cmds)))
-sys.exit(0 if ok_count == len(cmds) else 1)
+if missing:
+    print("缺少字段：%s" % ", ".join(missing))
+    sys.exit(1)
+if extra:
+    print("出现协议未定义的字段：%s" % ", ".join(extra))
+    sys.exit(1)
+
+print("全部 %d 个字段齐备，无多余字段" % len(expect))
+sys.exit(0)
 PY
+PROBE=$!
+
+sleep 0.5
+"$BRIDGE" --ros-args -p peer_port:="$PROBE_PORT" >"$P3B" 2>&1 &
+BRIDGE2=$!
+PIDS+=($BRIDGE2)
+
+wait $PROBE
 rc=$?
+kill "$BRIDGE2" 2>/dev/null || true
 
 sed 's/^/        /' "$P3"
 
 if [[ $rc -eq 0 ]]; then
-  pass "5 条控制指令全部收到成功应答"
+  pass "协议字段与 shared/mdc_protocol.h 完全一致"
 else
-  fail "有控制指令失败或超时（python 退出码 $rc）"
-fi
-
-sleep 1
-
-# 桥与假设备两侧交叉验证：不只看界面收到了应答，还要看对端确实处理了
-BRIDGE_HITS="$(grep -c '控制指令 #[0-9]* [a-z]* -> 成功' "$P2B" || true)"
-FAKE_HITS="$(grep -c '\[假服务\]' "$P2F" || true)"
-info "桥日志中「-> 成功」${BRIDGE_HITS} 次；假设备日志中「[假服务]」${FAKE_HITS} 次"
-
-if [[ "${BRIDGE_HITS:-0}" -ge 5 ]]; then
-  pass "桥侧确认 5 次服务调用成功"
-else
-  fail "桥侧成功记录不足（${BRIDGE_HITS:-0} < 5）"
-  dump "$P2B"
-fi
-
-if [[ "${FAKE_HITS:-0}" -ge 5 ]]; then
-  pass "假设备侧确认收到了 5 次指令"
-else
-  fail "假设备侧没有收全指令（${FAKE_HITS:-0} < 5）"
-  dump "$P2F"
+  fail "协议字段校验失败（python 退出码 $rc）"
+  dump "$P3B"
 fi
 
 # ============================================================ 结果
@@ -301,7 +299,7 @@ if [[ $FAILED -eq 0 ]]; then
 else
   printf '%s冒烟测试未通过，日志在 %s%s\n' "$RED" "$LOG_DIR" "$NC"
   printf '可以单独看：\n'
-  printf '  %s\n' "$P1" "$P2F" "$P2B" "$P2A" "$P3"
+  printf '  %s\n' "$P1" "$P2F" "$P2B" "$P2A" "$P3" "$P3B"
 fi
 
 exit $FAILED

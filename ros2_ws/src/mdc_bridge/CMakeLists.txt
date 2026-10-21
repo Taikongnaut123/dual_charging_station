@@ -13,6 +13,8 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(mdc_serial REQUIRED)
+# MdcData 里含 std_msgs/Header，直接用到就得直接声明
+find_package(std_msgs REQUIRED)
 
 # ---------------------------------------------------------------------------
 # 与 Qt 界面程序共用的协议契约头文件（shared/mdc_protocol.h）。
@@ -30,14 +32,14 @@ message(STATUS "共用协议头文件目录: ${MDC_SHARED_DIR}")
 # ---------------------------------------------------------------------------
 add_executable(mdc_bridge src/mdc_bridge_node.cpp)
 target_include_directories(mdc_bridge PRIVATE ${MDC_SHARED_DIR})
-ament_target_dependencies(mdc_bridge rclcpp mdc_serial)
+ament_target_dependencies(mdc_bridge rclcpp mdc_serial std_msgs)
 
 # ---------------------------------------------------------------------------
 # mdc_fake_pub：假设备（无真机时验证用）
 # ---------------------------------------------------------------------------
 add_executable(mdc_fake_pub src/mdc_fake_pub.cpp)
 target_include_directories(mdc_fake_pub PRIVATE ${MDC_SHARED_DIR})
-ament_target_dependencies(mdc_fake_pub rclcpp mdc_serial)
+ament_target_dependencies(mdc_fake_pub rclcpp mdc_serial std_msgs)
 
 install(TARGETS
   mdc_bridge

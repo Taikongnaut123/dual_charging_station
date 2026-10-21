@@ -21,11 +21,8 @@ SOURCES += \
     bridgeclient.cpp \
     stationcontroller.cpp \
     theme.cpp \
-    pages/controlpage.cpp \
     pages/overviewpage.cpp \
-    pages/peripheralpage.cpp \
-    pages/powerpage.cpp \
-    widgets/bytegrid.cpp \
+    pages/stationpage.cpp \
     widgets/card.cpp \
     widgets/chargecurvechart.cpp \
     widgets/circulargauge.cpp \
@@ -41,12 +38,9 @@ HEADERS += \
     stationcontroller.h \
     theme.h \
     shared/mdc_protocol.h \
-    pages/controlpage.h \
     pages/overviewpage.h \
     pages/pageutils.h \
-    pages/peripheralpage.h \
-    pages/powerpage.h \
-    widgets/bytegrid.h \
+    pages/stationpage.h \
     widgets/card.h \
     widgets/chargecurvechart.h \
     widgets/circulargauge.h \

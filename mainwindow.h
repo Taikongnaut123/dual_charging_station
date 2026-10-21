@@ -7,10 +7,8 @@
 #include "mdcdata.h"
 #include "stationcontroller.h"
 
-class ControlPage;
 class OverviewPage;
-class PeripheralPage;
-class PowerPage;
+class StationPage;
 
 class QLabel;
 class QListWidget;
@@ -37,10 +35,8 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow() override;
 
-    /** 连接 mdc_bridge（绑定状态接收端口并指定桥的控制端口） */
-    bool startBridge(quint16 cmdPort = mdcproto::kDefaultCmdPort,
-                     quint16 statPort = mdcproto::kDefaultStatPort,
-                     const QString &host = QStringLiteral("127.0.0.1"));
+    /** 绑定状态接收端口（单向接收，界面不发送任何东西） */
+    bool startBridge(quint16 statPort = mdcproto::kDefaultStatPort);
 
     /** 无真实桥时用内置仿真数据驱动界面（开发/演示用） */
     void setLoopbackEnabled(bool on);
@@ -73,9 +69,7 @@ private:
     StationController *m_controller = nullptr;
 
     OverviewPage *m_overviewPage = nullptr;
-    PowerPage *m_powerPage = nullptr;
-    PeripheralPage *m_peripheralPage = nullptr;
-    ControlPage *m_controlPage = nullptr;
+    StationPage *m_stationPage = nullptr;
 
     QTabWidget *m_tabs = nullptr;
     QListWidget *m_logList = nullptr;
