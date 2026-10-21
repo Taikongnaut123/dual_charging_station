@@ -20,7 +20,7 @@ namespace
 CircularGauge::CircularGauge(QWidget *parent)
     : QWidget(parent), m_accent(Theme::Accent), m_unit(QStringLiteral("%"))
 {
-    setMinimumSize(100, 100);
+    setMinimumSize(Theme::px(100), Theme::px(100));
 
     m_anim = new QPropertyAnimation(this, QByteArrayLiteral("value"), this);
     m_anim->setDuration(650);

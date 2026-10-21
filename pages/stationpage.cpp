@@ -38,7 +38,7 @@ void StationPage::buildUi()
 {
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(12);
+    layout->setSpacing(Theme::px(12));
 
     layout->addWidget(buildCcuCard());
     layout->addWidget(buildIoCard());
@@ -55,7 +55,7 @@ Card *StationPage::buildCcuCard()
     card->addWidget(m_ccuText);
 
     m_stage = new StageTimeline;
-    m_stage->setFixedHeight(74);
+    m_stage->setFixedHeight(Theme::px(74));
     m_stage->setLabels(StationController::ccuStageLabels());
     card->addWidget(m_stage);
 
@@ -70,7 +70,7 @@ Card *StationPage::buildIoCard()
     card->setBadge(QStringLiteral("link / charge / hall / fan"), QStringLiteral("info"));
 
     auto *row = new QHBoxLayout;
-    row->setSpacing(10);
+    row->setSpacing(Theme::px(10));
 
     m_manLink = new LightIndicator(QStringLiteral("手动线连接"));
     m_manCharge = new LightIndicator(QStringLiteral("手动充电"));

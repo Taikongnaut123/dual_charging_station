@@ -121,7 +121,7 @@ void StationController::onLinkStateChanged(BridgeClient::LinkState s)
     // 继续亮着"充电中"和冻结的读数会误导操作员（而且环形表的动画还在转）。
     // 这里统一归为"无数据"，具体原因由 offlineReason() 区分，页眉胶囊也会显示。
     m_offlineReason = (s == BridgeClient::LinkState::NoBridge) ? OfflineReason::NoBridge
-                                                              : OfflineReason::NoDevice;
+                                                               : OfflineReason::NoDevice;
     m_hasData = false;
 
     if (m_state != State::Offline)

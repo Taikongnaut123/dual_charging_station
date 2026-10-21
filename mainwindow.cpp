@@ -7,10 +7,12 @@
 
 #include <QDateTime>
 #include <QFrame>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
 #include <QResizeEvent>
+#include <QScreen>
 #include <QScrollArea>
 #include <QShortcut>
 #include <QTabWidget>
@@ -50,8 +52,10 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
     setWindowTitle(QStringLiteral("双轮足机器人充电桩 · 显示屏"));
-    setMinimumSize(1024, 620);
-    resize(1360, 800);
+    // 尺寸全部走 Theme::px()：8 寸屏（1024x768）下会自动按比例缩小，
+    // 屏幕够大时还是原来的 1360x800 设计稿尺寸。
+    setMinimumSize(Theme::px(760), Theme::px(440));
+    resize(Theme::px(Theme::kDesignWidth), Theme::px(Theme::kDesignHeight));
 
     m_bridge = new BridgeClient(this);
     m_controller = new StationController(m_bridge, this);
@@ -75,6 +79,21 @@ MainWindow::MainWindow(QWidget *parent)
 
     appendLog(0, QStringLiteral("显示屏程序启动"));
     appendLog(0, QStringLiteral("数据链路：mdc_node(ROS2) → /mdc_data → mdc_bridge → UDP → 本程序"));
+
+    // 一体屏分辨率五花八门，出问题时第一个要确认的就是"实际按多大缩放渲染的"。
+    // 记一条启动日志，省得现场还得去量屏幕。
+    if (const QScreen *screen = QGuiApplication::primaryScreen())
+    {
+        const QSize avail = screen->availableGeometry().size();
+        appendLog(0, QStringLiteral("界面缩放：屏幕 %1×%2，几何系数 %3，字号系数 %4"
+                                    "（设计稿 %5×%6）")
+                        .arg(avail.width())
+                        .arg(avail.height())
+                        .arg(Theme::geoScale(), 0, 'f', 2)
+                        .arg(Theme::fontScale(), 0, 'f', 2)
+                        .arg(Theme::kDesignWidth)
+                        .arg(Theme::kDesignHeight));
+    }
 }
 
 MainWindow::~MainWindow() = default;
@@ -100,8 +119,8 @@ void MainWindow::buildUi()
     setCentralWidget(central);
 
     auto *root = new QVBoxLayout(central);
-    root->setContentsMargins(16, 14, 16, 12);
-    root->setSpacing(10);
+    root->setContentsMargins(Theme::px(16), Theme::px(14), Theme::px(16), Theme::px(12));
+    root->setSpacing(Theme::px(10));
 
     root->addWidget(buildHeader());
 
@@ -122,7 +141,7 @@ QWidget *MainWindow::wrapInScrollArea(QWidget *page)
 {
     auto *container = new QWidget;
     auto *lay = new QVBoxLayout(container);
-    lay->setContentsMargins(14, 14, 14, 14);
+    lay->setContentsMargins(Theme::px(14), Theme::px(14), Theme::px(14), Theme::px(14));
     lay->addWidget(page);
 
     auto *scroll = new QScrollArea;
@@ -137,8 +156,8 @@ QWidget *MainWindow::buildHeader()
 {
     auto *header = new QWidget;
     auto *lay = new QHBoxLayout(header);
-    lay->setContentsMargins(4, 0, 4, 0);
-    lay->setSpacing(10);
+    lay->setContentsMargins(Theme::px(4), 0, Theme::px(4), 0);
+    lay->setSpacing(Theme::px(10));
 
     auto *titleBox = new QVBoxLayout;
     titleBox->setSpacing(1);
@@ -194,7 +213,7 @@ QWidget *MainWindow::buildLogPage()
 
     auto *container = new QWidget;
     auto *lay = new QVBoxLayout(container);
-    lay->setContentsMargins(14, 14, 14, 14);
+    lay->setContentsMargins(Theme::px(14), Theme::px(14), Theme::px(14), Theme::px(14));
     lay->addWidget(card);
     return container;
 }
@@ -203,8 +222,8 @@ QWidget *MainWindow::buildFooter()
 {
     auto *footer = new QWidget;
     auto *lay = new QHBoxLayout(footer);
-    lay->setContentsMargins(4, 0, 4, 0);
-    lay->setSpacing(12);
+    lay->setContentsMargins(Theme::px(4), 0, Theme::px(4), 0);
+    lay->setSpacing(Theme::px(12));
 
     m_footBridge = footerValue(QStringLiteral("未连接"));
     m_footRate = footerValue(QStringLiteral("0 Hz"));
@@ -231,7 +250,7 @@ void MainWindow::resizeEvent(QResizeEvent *event)
 
     // 窗口较窄时，底部那行提示会被挤压裁切，直接隐藏更干净
     if (m_footLastLog)
-        m_footLastLog->setVisible(width() >= 1180);
+        m_footLastLog->setVisible(width() >= Theme::px(1180));
 }
 
 void MainWindow::setupShortcuts()

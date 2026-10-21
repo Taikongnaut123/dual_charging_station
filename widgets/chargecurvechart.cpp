@@ -59,7 +59,7 @@ ChargeCurveChart::ChargeCurveChart(QWidget *parent)
       m_y1Name(QStringLiteral("充电电流")), m_y1Unit(QStringLiteral("A")),
       m_y2Name(QStringLiteral("电池电压")), m_y2Unit(QStringLiteral("V"))
 {
-    setMinimumHeight(150);
+    setMinimumHeight(Theme::px(150));
 }
 
 QSize ChargeCurveChart::sizeHint() const

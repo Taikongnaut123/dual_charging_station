@@ -40,6 +40,27 @@ namespace Theme
 
     const int RadiusCard = 14;
 
+    // ---------------- 屏幕适配 ----------------
+    /**
+     * 界面按 1360x800 的设计稿编写（见 kDesignWidth/kDesignHeight）。
+     * 一体屏实际像素比这小的时候，靠一组缩放系数把尺寸整体压下来，
+     * 否则内容会被屏幕裁掉——8 寸屏就属于这种情况。
+     *
+     * geoScale  : 间距、控件尺寸、圆角、边框宽度
+     * fontScale : 字号。**故意比 geoScale 缩得少**：8 寸屏像素密度远高于
+     *             普通显示器，字跟着等比例缩会小到看不清；宁可让行高变大，
+     *             多出来的高度由 QScrollArea 负责。
+     */
+    const int kDesignWidth = 1360;
+    const int kDesignHeight = 800;
+
+    void setUiScale(qreal geoScale, qreal fontScale);
+    qreal geoScale();
+    qreal fontScale();
+
+    /** 把设计稿里的像素值换算成当前屏幕下的像素值 */
+    int px(int designPx);
+
     /** 修改动态属性后重新应用样式（配合 QLabel[level="ok"] 之类的选择器） */
     void repolish(QWidget *widget);
 

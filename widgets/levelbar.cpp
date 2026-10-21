@@ -9,7 +9,7 @@
 LevelBar::LevelBar(const QString &caption, QWidget *parent)
     : QWidget(parent), m_caption(caption), m_accent(Theme::Accent)
 {
-    setMinimumHeight(22);
+    setMinimumHeight(Theme::px(22));
 }
 
 void LevelBar::setValue(int value)

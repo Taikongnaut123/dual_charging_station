@@ -48,7 +48,7 @@ void OverviewPage::buildUi()
 {
     auto *grid = new QGridLayout(this);
     grid->setContentsMargins(0, 0, 0, 0);
-    grid->setSpacing(12);
+    grid->setSpacing(Theme::px(12));
 
     grid->addWidget(buildPortCard(true), 0, 0);
     grid->addWidget(buildPortCard(false), 0, 1);
@@ -71,17 +71,17 @@ Card *OverviewPage::buildPortCard(bool manual)
 
     // 左：SOC 环形表；右：六项指标
     auto *row = new QHBoxLayout;
-    row->setSpacing(14);
+    row->setSpacing(Theme::px(14));
 
     w.gauge = new CircularGauge;
-    w.gauge->setFixedSize(150, 150);
+    w.gauge->setFixedSize(Theme::px(150), Theme::px(150));
     w.gauge->setCaption(QStringLiteral("SOC"));
     w.gauge->setUnit(QStringLiteral("%"));
     w.gauge->setAccent(manual ? Theme::Accent : Theme::Violet);
     row->addWidget(w.gauge);
 
     auto *kv = new QVBoxLayout;
-    kv->setSpacing(6);
+    kv->setSpacing(Theme::px(6));
 
     w.voltage = plainValue();
     w.chargeCurrent = plainValue();
@@ -130,7 +130,7 @@ Card *OverviewPage::buildSummaryCard()
 
     auto *grid = new QGridLayout;
     grid->setContentsMargins(0, 0, 0, 0);
-    grid->setSpacing(10);
+    grid->setSpacing(Theme::px(10));
     grid->addWidget(m_tileMode, 0, 0);
     grid->addWidget(m_tileEnergy, 0, 1);
     grid->addWidget(m_tileElapsed, 0, 2);
@@ -153,7 +153,7 @@ Card *OverviewPage::buildCurveCard()
     card->setBadge(QStringLiteral("最近 90 秒"), QStringLiteral("info"));
 
     m_chart = new ChargeCurveChart;
-    m_chart->setMinimumHeight(210);
+    m_chart->setMinimumHeight(Theme::px(210));
     m_chart->setSeries(QStringLiteral("手动口"), QStringLiteral("A"),
                        QStringLiteral("自动口"), QStringLiteral("A"));
     m_chart->setEmptyText(QStringLiteral("等待数据 ..."));

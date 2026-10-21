@@ -8,7 +8,7 @@
 LightIndicator::LightIndicator(const QString &caption, QWidget *parent)
     : QWidget(parent), m_caption(caption), m_onColor(Theme::Green), m_offColor(Theme::Track)
 {
-    setMinimumHeight(22);
+    setMinimumHeight(Theme::px(22));
 }
 
 void LightIndicator::setOn(bool on)

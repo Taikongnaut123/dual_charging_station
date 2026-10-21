@@ -1,10 +1,38 @@
 #include "theme.h"
 
+#include <QRegularExpression>
+#include <QStringList>
 #include <QStyle>
 #include <QWidget>
 
 namespace Theme
 {
+    namespace
+    {
+        qreal g_geoScale = 1.0;
+        qreal g_fontScale = 1.0;
+    }
+
+    void setUiScale(qreal geoScale, qreal fontScale)
+    {
+        g_geoScale = qBound(0.3, geoScale, 2.0);
+        g_fontScale = qBound(0.3, fontScale, 2.0);
+    }
+
+    qreal geoScale()
+    {
+        return g_geoScale;
+    }
+
+    qreal fontScale()
+    {
+        return g_fontScale;
+    }
+
+    int px(int designPx)
+    {
+        return qMax(1, qRound(designPx * g_geoScale));
+    }
 
     void repolish(QWidget *widget)
     {
@@ -303,6 +331,38 @@ QCheckBox::indicator:checked { background: @GREEN@; border-color: @GREEN@; }
         css.replace(QLatin1String("@AMBER@"), Amber.name());
         css.replace(QLatin1String("@RED@"), Red.name());
         css.replace(QLatin1String("@VIOLET@"), Violet.name());
+
+        // ---- 按屏幕缩放：样式表里的 px 全部按设计稿像素处理 ----
+        // font-size 用字号系数（缩得少），其余（padding/radius/border/宽高）
+        // 用几何系数。逐行处理，因为每条 font-size 声明都独占一行。
+        if (!qFuzzyCompare(g_geoScale, 1.0) || !qFuzzyCompare(g_fontScale, 1.0))
+        {
+            static const QRegularExpression pxRe(QStringLiteral("(\\d+)px"));
+            QStringList lines = css.split(QLatin1Char('\n'));
+            for (QString &line : lines)
+            {
+                if (!line.contains(QLatin1String("px")))
+                    continue;
+                const qreal k = line.contains(QLatin1String("font-size")) ? g_fontScale
+                                                                          : g_geoScale;
+                if (qFuzzyCompare(k, 1.0))
+                    continue;
+
+                QString out;
+                int last = 0;
+                auto it = pxRe.globalMatch(line);
+                while (it.hasNext())
+                {
+                    const auto m = it.next();
+                    out += line.mid(last, int(m.capturedStart()) - last);
+                    out += QString::number(qMax(1, qRound(m.captured(1).toInt() * k)));
+                    last = int(m.capturedEnd()) - 2; // 跳过 "px"，它要保留
+                }
+                out += line.mid(last);
+                line = out;
+            }
+            css = lines.join(QLatin1Char('\n'));
+        }
         return css;
     }
 

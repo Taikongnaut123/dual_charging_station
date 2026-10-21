@@ -17,7 +17,7 @@ StageTimeline::StageTimeline(QWidget *parent)
 {
     m_labels = QStringList{QStringLiteral("步骤1"), QStringLiteral("步骤2"),
                            QStringLiteral("步骤3")};
-    setMinimumHeight(46);
+    setMinimumHeight(Theme::px(46));
 }
 
 void StageTimeline::setLabels(const QStringList &labels)

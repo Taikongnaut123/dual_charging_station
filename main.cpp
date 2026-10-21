@@ -5,10 +5,12 @@
 #include <QCommandLineOption>
 #include <QCommandLineParser>
 #include <QLocale>
+#include <QScreen>
 #include <QStyleFactory>
 #include <QTimer>
 #include <QTranslator>
 
+#include <cmath>
 #include <cstdio>
 
 int main(int argc, char *argv[])
@@ -44,12 +46,7 @@ int main(int argc, char *argv[])
     // Fusion 风格在各平台下表现一致，配合自定义样式表效果最稳定
     QApplication::setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
 
-    // 中文界面下默认字号略小一号，具体尺寸由样式表控制
-    QFont appFont = app.font();
-    appFont.setPointSizeF(10.0);
-    app.setFont(appFont);
-
-    app.setStyleSheet(Theme::styleSheet());
+    // 字号与样式表在算出屏幕缩放系数后再设置（见下方 parser.process 之后）
 
     // 多语言：优先加载系统语言对应的翻译文件（:/i18n/...）
     QTranslator translator;
@@ -87,11 +84,61 @@ int main(int argc, char *argv[])
         QStringLiteral("把链路状态与运行统计打印到标准输出"
                        "（无头环境 / CI / 现场排障用，需要看日志时加这个参数）"));
 
+    // 现场如果觉得字偏大/偏小，不用改代码重编，直接调这个系数即可
+    QCommandLineOption uiScaleOption(
+        QStringLiteral("ui-scale"),
+        QStringLiteral("强制指定界面缩放系数（默认按屏幕分辨率自动计算）"),
+        QStringLiteral("scale"));
+
     parser.addOption(fullscreenOption);
     parser.addOption(loopbackOption);
     parser.addOption(statPortOption);
     parser.addOption(verboseOption);
+    parser.addOption(uiScaleOption);
     parser.process(app);
+
+    // ------------------------------------------------------------------
+    // 屏幕适配
+    //
+    // 界面按 1360x800 的设计稿编写。一体屏是 8 寸 1024x768，比设计稿小
+    // 得多，不缩放的话窗口恒为 1360x800，右侧和底部直接跑到屏幕外面。
+    //
+    // geo  : 几何尺寸系数。宽高各自需要的比例取小值，保证整幅内容放得下
+    // font : 字号系数。取 sqrt 折中——8 寸屏像素密度高，字号跟着几何等比
+    //        例缩会小到读不清；后果是行高相对变大、总高可能超出页面，
+    //        由外面的 QScrollArea 负责滚动，比“字看不清”好。
+    // ------------------------------------------------------------------
+    qreal geoScale = 1.0;
+    if (const QScreen *screen = QGuiApplication::primaryScreen())
+    {
+        const QSize avail = screen->availableGeometry().size();
+        if (avail.width() > 0 && avail.height() > 0)
+        {
+            geoScale = qMin(avail.width() / qreal(Theme::kDesignWidth),
+                            avail.height() / qreal(Theme::kDesignHeight));
+            // 下限不能卡得太高：如果板子上的 Qt 开了高 DPI 缩放（8 寸 160 DPI
+            // 很容易触发），availableGeometry() 给的是逻辑像素，会比物理像素
+            // 小一大截，卡在 0.6 就会溢出屏幕。
+            geoScale = qBound(0.35, geoScale, 1.0);
+        }
+    }
+    if (parser.isSet(uiScaleOption))
+    {
+        bool ok = false;
+        const qreal v = parser.value(uiScaleOption).toDouble(&ok);
+        if (ok && v > 0.3 && v <= 3.0)
+            geoScale = v;
+        else
+            qWarning("--ui-scale 参数无效，按屏幕自动计算");
+    }
+    const qreal fontScale = qBound(0.8, std::sqrt(geoScale), 1.0);
+    Theme::setUiScale(geoScale, fontScale);
+
+    // 中文界面下默认字号略小一号，具体尺寸由样式表控制
+    QFont appFont = app.font();
+    appFont.setPointSizeF(10.0 * fontScale);
+    app.setFont(appFont);
+    app.setStyleSheet(Theme::styleSheet());
 
     MainWindow window;
 
