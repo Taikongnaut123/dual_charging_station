@@ -53,9 +53,10 @@ FAKE="${FAKE_BIN:-$WS/install/mdc_bridge/lib/mdc_bridge/mdc_fake_pub}"
 OVERLAY_SETUP="${OVERLAY_SETUP-$WS/install/setup.bash}"
 
 # 界面监听状态帧的端口（与 shared/mdc_protocol.h 的 kDefaultStatPort 一致）
-STAT_PORT=8891
+# 可被环境变量覆盖：本机 8891 被别的实例占着时用 STAT_PORT=8901 跑
+STAT_PORT="${STAT_PORT:-8891}"
 # 阶段 3 用的独立端口，避免和界面抢 8891
-PROBE_PORT=8892
+PROBE_PORT="${PROBE_PORT:-8892}"
 
 export QT_QPA_PLATFORM=offscreen
 mkdir -p "$LOG_DIR"
@@ -152,12 +153,19 @@ set -u
 
 "$FAKE"   >"$P2F" 2>&1 & PIDS+=($!)
 sleep 1
-"$BRIDGE" >"$P2B" 2>&1 & PIDS+=($!)
+"$BRIDGE" --ros-args -p peer_port:="$STAT_PORT" >"$P2B" 2>&1 & PIDS+=($!)
 sleep 2
-"$APP" --verbose >"$P2A" 2>&1 & PIDS+=($!)
+"$APP" --verbose --stat-port "$STAT_PORT" >"$P2A" 2>&1 & PIDS+=($!)
 
-info "三个进程已启动，等 12 秒看链路是否打通 ..."
+info "三个进程已启动（界面监听 UDP ${STAT_PORT}），等 12 秒看链路是否打通 ..."
 sleep 12
+
+# 关键：界面绑不上端口时会**退回环回模式**，而环回模式自己按 2Hz 造反数据，
+# 帧数和链路状态都会“看起来很健康”——测试会假通过。必须先排除这种情况。
+if grep -qE '无法绑定 UDP|已进入环回模式' "$P2A"; then
+  fail "界面没能绑定 UDP ${STAT_PORT}，已退回环回仿真模式（端口被其它实例占用？）——本次结果不可信"
+  dump "$P2A"
+fi
 
 if grep -q '桥已启动' "$P2B"; then
   pass "桥进程启动正常"

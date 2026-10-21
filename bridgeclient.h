@@ -91,6 +91,8 @@ private:
 
     qint64 m_lastAnyPacketMs = 0;
     qint64 m_lastStatePacketMs = 0;
+    /** 是否真的收到过任何报文。区分"从未收到"与"收到过但超时" */
+    bool m_gotAnyPacket = false;
     int m_frameRateHz = 0;
 
     qint64 m_seqWindowStartMs = 0;

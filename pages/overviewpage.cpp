@@ -221,13 +221,19 @@ void OverviewPage::onData(const MdcData &d)
 void OverviewPage::applyState(StationController::State state)
 {
     QColor color = Theme::TextSecondary;
+    QString title = StationController::stateText(state);
     QString sub;
+    const bool live = (state != StationController::State::Offline);
 
     switch (state)
     {
     case StationController::State::Offline:
-        color = Theme::TextMuted;
-        sub = QStringLiteral("没有收到设备数据：桥未运行，或设备未上报");
+        // 离线时先说清"为什么"：桥没了和设备不上报，排查方向完全不同
+        color = Theme::Amber;
+        title = QStringLiteral("数据中断");
+        sub = m_ctl->offlineDetail();
+        if (sub.isEmpty())
+            sub = QStringLiteral("没有收到设备数据");
         break;
     case StationController::State::Fault:
         color = Theme::Red;
@@ -247,9 +253,14 @@ void OverviewPage::applyState(StationController::State state)
         break;
     }
 
-    m_stateText->setText(StationController::stateText(state));
+    m_stateText->setText(title);
     m_stateText->setStyleSheet(QStringLiteral("color:%1;").arg(color.name()));
     m_stateSub->setText(sub);
+
+    // 离线时必须停掉环形表的流动动画：否则它会一直转，配合冻结的读数，
+    // 看起来像是还在正常充电 —— 这是最误导的一种"假在线"。
+    m_man.gauge->setFlowing(live && m_ctl->data().manualCharging());
+    m_auto.gauge->setFlowing(live && m_ctl->data().autoCharging());
 }
 
 void OverviewPage::onStateChanged(StationController::State state)

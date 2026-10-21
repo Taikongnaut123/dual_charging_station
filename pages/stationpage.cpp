@@ -79,8 +79,8 @@ Card *StationPage::buildIoCard()
     m_hall = new LightIndicator(QStringLiteral("霍尔开关"));
     m_fan = new LightIndicator(QStringLiteral("风扇"));
 
-    const QList<LightIndicator *> lights{m_manLink,  m_manCharge, m_autoLink,
-                                         m_autoCharge, m_hall,     m_fan};
+    const QList<LightIndicator *> lights{m_manLink, m_manCharge, m_autoLink,
+                                         m_autoCharge, m_hall, m_fan};
     for (LightIndicator *l : lights)
     {
         l->setColors(Theme::Green, Theme::Track);
@@ -161,13 +161,10 @@ void StationPage::onData(const MdcData &d)
     m_fan->setValueText(d.onOffText(d.fanStatus));
 
     // ---- 原始字段 ----
-    m_rawMode->setText(QStringLiteral("%1 (%2)").arg(d.chargeMode).arg(
-        MdcData::chargeModeText(d.chargeMode)));
-    m_rawState->setText(QStringLiteral("%1 (%2)").arg(d.chargeState).arg(
-        MdcData::chargeStateText(d.chargeState)));
+    m_rawMode->setText(QStringLiteral("%1 (%2)").arg(d.chargeMode).arg(MdcData::chargeModeText(d.chargeMode)));
+    m_rawState->setText(QStringLiteral("%1 (%2)").arg(d.chargeState).arg(MdcData::chargeStateText(d.chargeState)));
 
-    m_rawCcu->setText(QStringLiteral("%1 / %2").arg(d.ccuMotorStatus).arg(
-        MdcData::ccuMotorStatusText(d.ccuMotorStatus)));
+    m_rawCcu->setText(QStringLiteral("%1 / %2").arg(d.ccuMotorStatus).arg(MdcData::ccuMotorStatusText(d.ccuMotorStatus)));
     m_rawCcu->setStyleSheet(d.ccuFault()
                                 ? QStringLiteral("color:%1;").arg(Theme::Red.name())
                                 : QString());

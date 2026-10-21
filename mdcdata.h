@@ -28,13 +28,13 @@
 struct MdcData
 {
     // ------------------------------------------------ 手动充电口（MANUAL_RobotStatus）
-    quint8 manualChgSwitch = 0;          // 充电开关 0关 1开
-    quint8 manualBatteryId = 0;          // 电池 ID
-    quint16 manualTotalVoltage = 0;      // 总电压 mV
-    quint16 manualChargeCurrent = 0;     // 充电电流 0.1A
-    quint16 manualDischargeCurrent = 0;  // 放电电流 0.1A
-    quint16 manualSoc = 0;               // 电量 %
-    quint16 manualTemp = 0;              // 电池温度 ℃
+    quint8 manualChgSwitch = 0;         // 充电开关 0关 1开
+    quint8 manualBatteryId = 0;         // 电池 ID
+    quint16 manualTotalVoltage = 0;     // 总电压 mV
+    quint16 manualChargeCurrent = 0;    // 充电电流 0.1A
+    quint16 manualDischargeCurrent = 0; // 放电电流 0.1A
+    quint16 manualSoc = 0;              // 电量 %
+    quint16 manualTemp = 0;             // 电池温度 ℃
 
     // -------------------------------------------------- 自动充电口（AUTO_RobotStatus）
     quint8 autoChgSwitch = 0;
@@ -46,15 +46,15 @@ struct MdcData
     quint16 autoTemp = 0;
 
     // ---------------------------------------------------------- 充电桩状态
-    quint8 ccuMotorStatus = 0;   // 1初始化中 2初始化完成 3回零中 4回零完成 5到位中 6到位完成 0xFE断联 0xFF错误
-    quint8 chargeMode = 0;       // 0待机 1手动 2自动
-    quint8 chargeState = 0;      // 0故障 1空闲 2充电中 3充满
-    qint32 fanStatus = 0;        // 风扇 0关 1开
-    qint32 hallSwitch = 0;       // 霍尔开关 0未触发 1触发
-    qint32 manualLinkStatus = 0; // 手动线连接 0未连接 1已连接
+    quint8 ccuMotorStatus = 0;     // 1初始化中 2初始化完成 3回零中 4回零完成 5到位中 6到位完成 0xFE断联 0xFF错误
+    quint8 chargeMode = 0;         // 0待机 1手动 2自动
+    quint8 chargeState = 0;        // 0故障 1空闲 2充电中 3充满
+    qint32 fanStatus = 0;          // 风扇 0关 1开
+    qint32 hallSwitch = 0;         // 霍尔开关 0未触发 1触发
+    qint32 manualLinkStatus = 0;   // 手动线连接 0未连接 1已连接
     qint32 manualChargeStatus = 0; // 手动充电 0关 1开
-    qint32 autoLinkStatus = 0;   // 自动充电连接 0未连接 1已连接
-    qint32 autoChargeStatus = 0; // 自动充电 0关 1开
+    qint32 autoLinkStatus = 0;     // 自动充电连接 0未连接 1已连接
+    qint32 autoChargeStatus = 0;   // 自动充电 0关 1开
 
     // ================================================================ 派生量
     // 下面这些是"显示用"的换算与判定，不是协议字段。

@@ -265,14 +265,22 @@ void MainWindow::onLinkStateChanged(BridgeClient::LinkState state)
     case BridgeClient::LinkState::Online:
         text = QStringLiteral("设备在线");
         level = QStringLiteral("ok");
+        // setLinkState 只在状态变化时发信号，所以这里每条都是真正的"变化"，不会刷屏
+        appendLog(3, QStringLiteral("链路正常：开始收到设备数据"));
         break;
     case BridgeClient::LinkState::BridgeOnly:
         text = QStringLiteral("桥在线 · 设备无数据");
         level = QStringLiteral("warn");
+        appendLog(1, QStringLiteral(
+                         "链路告警：桥在线但设备无数据，界面数值已过期。"
+                         "请检查串口连接、mdc_node 是否在运行、以及 ROS_DOMAIN_ID 与 QoS"));
         break;
     case BridgeClient::LinkState::NoBridge:
         text = QStringLiteral("桥未连接");
         level = QStringLiteral("err");
+        appendLog(2, QStringLiteral(
+                         "链路中断：收不到 mdc_bridge 的心跳，界面数值已过期。"
+                         "请检查桥进程是否在运行、UDP 端口是否被占用"));
         break;
     }
     setPill(m_pillLink, text, level);

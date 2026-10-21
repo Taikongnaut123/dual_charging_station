@@ -147,16 +147,23 @@ int main(int argc, char *argv[])
         QObject::connect(statTimer, &QTimer::timeout, [emitLine, client]()
                          {
             const MdcData &d = client->lastData();
+            // 没收到数据时不能直接打印字段原始值：charge_state 的默认值是 0，
+            // 而 0 的含义恰好是"故障"，会把"没数据"误报成"故障"。
+            const bool live = (client->linkState() == BridgeClient::LinkState::Online);
             emitLine(QStringLiteral("[统计] 帧=%1 速率=%2Hz 丢帧=%3 链路=%4 "
-                                    "模式=%5 状态=%6 手动SOC=%7% 自动SOC=%8%")
+                                    "模式=%5 状态=%6 手动SOC=%7 自动SOC=%8")
                          .arg(client->frameCount())
                          .arg(client->frameRateHz())
                          .arg(client->lostFrames())
                          .arg(BridgeClient::linkStateText(client->linkState()))
-                         .arg(MdcData::chargeModeText(d.chargeMode))
-                         .arg(MdcData::chargeStateText(d.chargeState))
-                         .arg(d.manualSoc)
-                         .arg(d.autoSoc)); });
+                         .arg(live ? MdcData::chargeModeText(d.chargeMode)
+                                   : QStringLiteral("--"))
+                         .arg(live ? MdcData::chargeStateText(d.chargeState)
+                                   : QStringLiteral("--"))
+                         .arg(live ? QStringLiteral("%1%").arg(d.manualSoc)
+                                   : QStringLiteral("--"))
+                         .arg(live ? QStringLiteral("%1%").arg(d.autoSoc)
+                                   : QStringLiteral("--"))); });
         statTimer->start(2000);
     }
 

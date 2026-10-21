@@ -95,6 +95,7 @@ bool BridgeClient::start(quint16 statPort)
     const qint64 now = monotonicMs();
     m_lastAnyPacketMs = now;
     m_lastStatePacketMs = now;
+    m_gotAnyPacket = false;
     m_seqWindowStartMs = now;
     m_seqWindowCount = 0;
     m_frameCount = 0;
@@ -147,6 +148,7 @@ void BridgeClient::handleObject(const QJsonObject &o)
 
     if (type == QLatin1String(mdcproto::kTypeState))
     {
+        m_gotAnyPacket = true;
         m_lastAnyPacketMs = now;
         m_lastStatePacketMs = now;
         ++m_frameCount;
@@ -166,6 +168,7 @@ void BridgeClient::handleObject(const QJsonObject &o)
 
     if (type == QLatin1String(mdcproto::kTypeHeartbeat))
     {
+        m_gotAnyPacket = true;
         m_lastAnyPacketMs = now;
         const bool mdcAlive = o.value(QLatin1String(mdcproto::kMdcAlive)).toInt() != 0;
         // 心跳里带着"设备是否上报"，据此区分"桥在但设备没数据"
@@ -195,7 +198,12 @@ void BridgeClient::onWatchdog()
     }
 
     // 2) 链路状态降级
-    if (now - m_lastAnyPacketMs > kNoBridgeTimeoutMs)
+    //
+    // 注意 `!m_gotAnyPacket` 这个条件不能省：刚启动时从来没收到过任何包，
+    // 而 m_lastStatePacketMs 是在 start() 里初始化的，所以 2.5 秒后
+    // "now - m_lastStatePacketMs > kStateTimeoutMs" 会成立，凭空报出
+    // "桥已连接"（它的语义是收到心跳但设备无数据）——完全不符合事实。
+    if (!m_gotAnyPacket || now - m_lastAnyPacketMs > kNoBridgeTimeoutMs)
         setLinkState(LinkState::NoBridge);
     else if (now - m_lastStatePacketMs > kStateTimeoutMs)
         setLinkState(LinkState::BridgeOnly);

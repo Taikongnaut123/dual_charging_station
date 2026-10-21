@@ -26,11 +26,11 @@ namespace
     constexpr double kCycle = 140.0; // 一个完整循环（秒）
 
     // 时间轴
-    constexpr double kManStart = 20.0;    // 手动口开始充电
-    constexpr double kManEnd = 65.0;      // 手动口充电结束（充满）
-    constexpr double kManFullEnd = 75.0;  // 手动口"充满"状态维持到这时
-    constexpr double kAutoStart = 80.0;   // 自动口开始充电
-    constexpr double kAutoEnd = 125.0;    // 自动口充电结束
+    constexpr double kManStart = 20.0;     // 手动口开始充电
+    constexpr double kManEnd = 65.0;       // 手动口充电结束（充满）
+    constexpr double kManFullEnd = 75.0;   // 手动口"充满"状态维持到这时
+    constexpr double kAutoStart = 80.0;    // 自动口开始充电
+    constexpr double kAutoEnd = 125.0;     // 自动口充电结束
     constexpr double kAutoFullEnd = 135.0; // 自动口"充满"维持到这时
 
     constexpr double kSocStart = 38.0;

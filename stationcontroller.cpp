@@ -95,19 +95,42 @@ void StationController::onData(const MdcData &d)
     emit dataChanged(m_data);
 }
 
+QString StationController::offlineDetail() const
+{
+    switch (m_offlineReason)
+    {
+    case OfflineReason::NoBridge:
+        return QStringLiteral("收不到 mdc_bridge 的心跳：桥进程没运行，或网络/端口不通");
+    case OfflineReason::NoDevice:
+        return QStringLiteral("桥在线，但设备没有上报数据：检查串口连接与 mdc_node 是否在跑");
+    case OfflineReason::None:
+        break;
+    }
+    return QString();
+}
+
 void StationController::onLinkStateChanged(BridgeClient::LinkState s)
 {
-    if (s == BridgeClient::LinkState::NoBridge)
+    if (s == BridgeClient::LinkState::Online)
     {
-        m_hasData = false;
-        if (m_state != State::Offline)
-        {
-            m_state = State::Offline;
-            // 掉线时把本次充电会话结算掉，避免统计悬空
-            if (m_sessionSeconds > 0)
-                finishSession();
-            emit stateChanged(m_state);
-        }
+        m_offlineReason = OfflineReason::None;
+        return;
+    }
+
+    // 注意 BridgeOnly 也要处理：桥活着但设备不上报时，界面上的数值已经过期，
+    // 继续亮着"充电中"和冻结的读数会误导操作员（而且环形表的动画还在转）。
+    // 这里统一归为"无数据"，具体原因由 offlineReason() 区分，页眉胶囊也会显示。
+    m_offlineReason = (s == BridgeClient::LinkState::NoBridge) ? OfflineReason::NoBridge
+                                                              : OfflineReason::NoDevice;
+    m_hasData = false;
+
+    if (m_state != State::Offline)
+    {
+        m_state = State::Offline;
+        // 掉线时把本次充电会话结算掉，避免统计悬空
+        if (m_sessionSeconds > 0)
+            finishSession();
+        emit stateChanged(m_state);
     }
 }
 

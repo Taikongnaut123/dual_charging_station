@@ -40,6 +40,18 @@ public:
     };
     Q_ENUM(State)
 
+    /**
+     * 离线原因 —— 区分"桥没了"和"设备没数据"，两者排查方向完全不同：
+     * 前者查桥进程/网络，后者查串口/mdc_node/QoS。
+     */
+    enum class OfflineReason
+    {
+        None,     // 在线
+        NoBridge, // 收不到桥的心跳
+        NoDevice  // 桥在线，但设备没上报
+    };
+    Q_ENUM(OfflineReason)
+
     /** 曲线采样点：两个充电口的充电电流（单位 A） */
     struct CurvePoint
     {
@@ -54,6 +66,9 @@ public:
     const MdcData &data() const { return m_data; }
     State state() const { return m_state; }
     bool hasData() const { return m_hasData; }
+    OfflineReason offlineReason() const { return m_offlineReason; }
+    /** 离线的可操作说明（在线时返回空串） */
+    QString offlineDetail() const;
     BridgeClient *client() const { return m_client; }
 
     // ---------------------------------------------------------- CCU 电机进度
@@ -110,6 +125,7 @@ private:
     MdcData m_data;
     State m_state = State::Offline;
     bool m_hasData = false;
+    OfflineReason m_offlineReason = OfflineReason::None;
 
     int m_ccuStageCurrent = -1;
     int m_ccuStageReached = -1;
