@@ -584,6 +584,28 @@ run_demo.sh                 一键起全套
 
 **桥是 ROS2 节点，目标机没装 ROS2 就直接跑不起来**；界面程序不受影响。
 
+#### 起不来先看缺什么
+
+```bash
+ldd ./bin/dual_charging_station | grep "not found"
+ldd ./bin/mdc_bridge            | grep "not found"
+```
+
+**`libgssapi.so.3: cannot open shared object file`** —— 这条不是我们漏打包，
+是**板子上的 Qt5 和我们打包用的 Qt5 用了不同的 GSSAPI 实现**：
+
+| 构建环境 | `libQt5Network.so.5` 需要 | 提供包 |
+| --- | --- | --- |
+| Ubuntu 22.04（我们的 CI） | `libgssapi_krb5.so.2` | `libgssapi-krb5-2` |
+| 部分厂商镜像（如 RK3588） | `libgssapi.so.3` | `libgssapi3-heimdal` |
+
+```bash
+sudo apt install libgssapi3-heimdal
+```
+
+判断方法：报错里只缺 `libgssapi.so.3`、而 `libQt5Widgets.so.5` 之类都已经找到，
+说明 Qt 版本是兼容的，补这一个库就行。如果连 Qt5 的库都缺，才需要装上面那四个包。
+
 ### 日常怎么用
 
 ```bash

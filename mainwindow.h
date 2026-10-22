@@ -90,7 +90,7 @@ private:
     QLabel *m_pillDevice = nullptr;
     QLabel *m_pillState = nullptr;
 
-    QLabel *m_headerSub = nullptr;   // 标题下的英文副标题，矮屏时隐藏
+    QLabel *m_headerSub = nullptr; // 标题下的英文副标题，矮屏时隐藏
 
     QLabel *m_footBridge = nullptr;
     QLabel *m_footRate = nullptr;
