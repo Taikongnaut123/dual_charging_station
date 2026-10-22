@@ -71,6 +71,12 @@ public:
         m_timer = create_wall_timer(std::chrono::milliseconds(500), [this]
                                     { tick(); });
 
+        // 调试/演示用：强制指定两个口的 link_status，用来验证界面置灰逻辑。
+        //   -1 跟随充电状态（默认）
+        //    0 都不启用        1 仅手动
+        //    2 仅自动          3 都启用
+        m_linkOverride = static_cast<int>(declare_parameter<int>("link_override", -1));
+
         RCLCPP_INFO(get_logger(), "假设备已启动：约 2Hz 发布 /mdc_data（周期 %.0f 秒）", kCycle);
         RCLCPP_INFO(get_logger(), "模拟流程：就位 -> 手动口充电 -> 空闲 -> 自动口充电 -> 空闲");
         RCLCPP_INFO(get_logger(), "注意：新协议只收不发，本节点不提供任何控制 Service");
@@ -156,9 +162,22 @@ private:
         m.fan_status = (manCharging || autoCharging || manFull || autoFull) ? 1 : 0;
         m.hall_switch = (t >= 18.0) ? 1 : 0; // 车到位后霍尔触发
 
-        m.manual_link_status = (manCharging || manFull) ? 1 : 0;
+        // 两个口的"已连接"标志。真机由硬件给，这里默认跟随充电状态，
+        // 需要单独验证界面时用 link_override 参数强制指定。
+        bool manLink = (manCharging || manFull);
+        bool autoLink = (autoCharging || autoFull);
+        switch (m_linkOverride)
+        {
+        case 0: manLink = false; autoLink = false; break;
+        case 1: manLink = true;  autoLink = false; break;
+        case 2: manLink = false; autoLink = true;  break;
+        case 3: manLink = true;  autoLink = true;  break;
+        default: break;
+        }
+
+        m.manual_link_status = manLink ? 1 : 0;
         m.manual_charge_status = manCharging ? 1 : 0;
-        m.auto_link_status = (autoCharging || autoFull) ? 1 : 0;
+        m.auto_link_status = autoLink ? 1 : 0;
         m.auto_charge_status = autoCharging ? 1 : 0;
 
         m_pub->publish(m);
@@ -167,6 +186,7 @@ private:
     rclcpp::Publisher<mdc_serial::msg::MdcData>::SharedPtr m_pub;
     rclcpp::TimerBase::SharedPtr m_timer;
     rclcpp::Time m_t0;
+    int m_linkOverride = -1;
 };
 
 int main(int argc, char **argv)

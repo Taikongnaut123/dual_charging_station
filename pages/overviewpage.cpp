@@ -66,6 +66,7 @@ Card *OverviewPage::buildPortCard(bool manual)
 
     auto *card = new Card(manual ? QStringLiteral("手动充电口")
                                  : QStringLiteral("自动充电口"));
+    w.card = card;
     w.badge = card->setBadge(manual ? QStringLiteral("MANUAL") : QStringLiteral("AUTO"),
                              QStringLiteral("info"));
 
@@ -100,6 +101,17 @@ Card *OverviewPage::buildPortCard(bool manual)
 
     row->addLayout(kv, 1);
     card->addLayout(row);
+
+    // 未启用提示：只有 link_status = 0 时显示。写清楚到底是哪一路没接，
+    // 并把原始字段名带上，现场对着协议文档一看就明白。
+    w.hint = new QLabel(manual
+                            ? QStringLiteral("手动充电线未连接（manual_link_status = 0），本口未启用")
+                            : QStringLiteral("自动充电连接未建立（auto_link_status = 0），本口未启用"));
+    w.hint->setObjectName(QStringLiteral("portHint"));
+    w.hint->setWordWrap(true);
+    w.hint->setVisible(false);
+    card->addWidget(w.hint);
+
     return card;
 }
 
@@ -163,35 +175,57 @@ Card *OverviewPage::buildCurveCard()
 
 // ------------------------------------------------------------------ 刷新
 
+void OverviewPage::updatePort(bool manual, const MdcData &d)
+{
+    PortWidgets &w = manual ? m_man : m_auto;
+    const bool linked = manual ? d.manualLinked() : d.autoLinked();
+    const bool charging = manual ? d.manualCharging() : d.autoCharging();
+    const bool switchOn = manual ? d.manualSwitchOn() : d.autoSwitchOn();
+
+    // 整卡置灰：QSS 靠动态属性 link 选择，改完必须 repolish 才生效
+    w.card->setProperty("link", linked ? QStringLiteral("on") : QStringLiteral("off"));
+    Theme::repolish(w.card);
+    w.hint->setVisible(!linked);
+    w.gauge->setDimmed(!linked);
+
+    if (!linked)
+    {
+        // 没接线时把这六个字段清成 "--"：设备可能仍然上报上一块的残留值，
+        // 直接显示会让人以为"这个口接着一块 0A 的电池"。
+        w.badge->setText(QStringLiteral("未启用"));
+        w.badge->setProperty("level", QStringLiteral("dim"));
+        Theme::repolish(w.badge);
+        w.gauge->setValue(0);
+        w.gauge->setFlowing(false);
+        for (QLabel *l : {w.voltage, w.chargeCurrent, w.dischargeCurrent,
+                          w.temp, w.batteryId, w.chgSwitch})
+            l->setText(QStringLiteral("--"));
+        return;
+    }
+
+    w.badge->setText(manual ? QStringLiteral("MANUAL") : QStringLiteral("AUTO"));
+    w.badge->setProperty("level", charging ? QStringLiteral("ok") : QStringLiteral("dim"));
+    Theme::repolish(w.badge);
+
+    w.gauge->animateTo(manual ? d.manualSoc : d.autoSoc);
+    w.gauge->setFlowing(charging && m_ctl->state() != StationController::State::Offline);
+
+    w.voltage->setText(voltText(manual ? d.manualVoltageV() : d.autoVoltageV()));
+    w.chargeCurrent->setText(ampText(manual ? d.manualChargeCurrentA()
+                                            : d.autoChargeCurrentA()));
+    w.dischargeCurrent->setText(ampText(manual ? d.manualDischargeCurrentA()
+                                               : d.autoDischargeCurrentA()));
+    w.temp->setText(QStringLiteral("%1 ℃").arg(manual ? d.manualTemp : d.autoTemp));
+    w.batteryId->setText(QString::number(manual ? d.manualBatteryId : d.autoBatteryId));
+    w.chgSwitch->setText(switchOn ? QStringLiteral("开") : QStringLiteral("关"));
+    w.chgSwitch->setProperty("level", switchOn ? QStringLiteral("ok") : QStringLiteral("dim"));
+    Theme::repolish(w.chgSwitch);
+}
+
 void OverviewPage::onData(const MdcData &d)
 {
-    // ---- 手动充电口 ----
-    m_man.gauge->animateTo(d.manualSoc);
-    m_man.gauge->setFlowing(d.manualCharging());
-    m_man.voltage->setText(voltText(d.manualVoltageV()));
-    m_man.chargeCurrent->setText(ampText(d.manualChargeCurrentA()));
-    m_man.dischargeCurrent->setText(ampText(d.manualDischargeCurrentA()));
-    m_man.temp->setText(QStringLiteral("%1 ℃").arg(d.manualTemp));
-    m_man.batteryId->setText(QString::number(d.manualBatteryId));
-    m_man.chgSwitch->setText(d.manualSwitchOn() ? QStringLiteral("开") : QStringLiteral("关"));
-    m_man.chgSwitch->setProperty("level", d.manualSwitchOn() ? QStringLiteral("ok")
-                                                             : QStringLiteral("dim"));
-    m_man.badge->setProperty("level", d.manualCharging() ? QStringLiteral("ok")
-                                                         : QStringLiteral("dim"));
-
-    // ---- 自动充电口 ----
-    m_auto.gauge->animateTo(d.autoSoc);
-    m_auto.gauge->setFlowing(d.autoCharging());
-    m_auto.voltage->setText(voltText(d.autoVoltageV()));
-    m_auto.chargeCurrent->setText(ampText(d.autoChargeCurrentA()));
-    m_auto.dischargeCurrent->setText(ampText(d.autoDischargeCurrentA()));
-    m_auto.temp->setText(QStringLiteral("%1 ℃").arg(d.autoTemp));
-    m_auto.batteryId->setText(QString::number(d.autoBatteryId));
-    m_auto.chgSwitch->setText(d.autoSwitchOn() ? QStringLiteral("开") : QStringLiteral("关"));
-    m_auto.chgSwitch->setProperty("level", d.autoSwitchOn() ? QStringLiteral("ok")
-                                                            : QStringLiteral("dim"));
-    m_auto.badge->setProperty("level", d.autoCharging() ? QStringLiteral("ok")
-                                                        : QStringLiteral("dim"));
+    updatePort(true, d);
+    updatePort(false, d);
 
     // ---- 概况 ----
     m_tileMode->setValue(MdcData::chargeModeText(d.chargeMode));
@@ -259,8 +293,10 @@ void OverviewPage::applyState(StationController::State state)
 
     // 离线时必须停掉环形表的流动动画：否则它会一直转，配合冻结的读数，
     // 看起来像是还在正常充电 —— 这是最误导的一种"假在线"。
-    m_man.gauge->setFlowing(live && m_ctl->data().manualCharging());
-    m_auto.gauge->setFlowing(live && m_ctl->data().autoCharging());
+    // 同理，未启用的口（link_status = 0）也不该转。
+    const MdcData &d = m_ctl->data();
+    m_man.gauge->setFlowing(live && d.manualLinked() && d.manualCharging());
+    m_auto.gauge->setFlowing(live && d.autoLinked() && d.autoCharging());
 }
 
 void OverviewPage::onStateChanged(StationController::State state)

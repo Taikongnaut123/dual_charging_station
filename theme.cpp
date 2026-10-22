@@ -86,6 +86,21 @@ QLabel#badge[level="warn"] { color: @AMBER@;  border-color: rgba(245,165,36,90);
 QLabel#badge[level="err"]  { color: @RED@;    border-color: rgba(240,75,75,90);   background: rgba(240,75,75,26); }
 QLabel#badge[level="info"] { color: @ACCENT@; border-color: rgba(34,211,238,90);  background: rgba(34,211,238,26); }
 
+/* ---------------- 未启用的充电口（link_status = 0） ----------------
+ * 整卡降级：底色压暗 + 虚线边框，一眼就能看出"这个口没启用"。
+ * 自绘的环形表不吃 QSS，那边由 CircularGauge::setDimmed() 单独处理。
+ */
+QFrame#card[link="off"] {
+    background: @BG_BOTTOM@;
+    border: 1px dashed @CARD_BORDER@;
+}
+QFrame#card[link="off"] QLabel#cardTitle,
+QFrame#card[link="off"] QLabel#rowKey,
+QFrame#card[link="off"] QLabel#rowVal { color: @TEXT3@; }
+
+/* 未启用提示：用琥珀色，和"故障红"区分开——没接电池不是故障 */
+QLabel#portHint { color: @AMBER@; font-size: 11px; }
+
 /* ---------------- 数据小格子 ---------------- */
 QFrame#tile {
     background: @PANEL@;

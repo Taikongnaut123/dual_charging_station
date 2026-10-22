@@ -34,6 +34,13 @@ public:
     void setUnit(const QString &unit);       // 单位，默认 "%"
     void setFlowing(bool on);                // 是否显示流动光点
 
+    /**
+     * 置灰：本口未启用（link_status = 0）时用。
+     * 自绘控件不受 QSS 影响，所以"变灰"必须在绘制里做。
+     */
+    void setDimmed(bool on);
+    bool isDimmed() const { return m_dimmed; }
+
     QSize sizeHint() const override;
     QSize minimumSizeHint() const override;
 
@@ -53,6 +60,7 @@ private:
     QTimer *m_flowTimer = nullptr;
     double m_phase = 0.0;
     bool m_flowing = false;
+    bool m_dimmed = false;
 };
 
 #endif // CIRCULARGAUGE_H

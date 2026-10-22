@@ -93,6 +93,16 @@ void CircularGauge::setFlowing(bool on)
     update();
 }
 
+void CircularGauge::setDimmed(bool on)
+{
+    if (m_dimmed == on)
+        return;
+    m_dimmed = on;
+    if (on)
+        setFlowing(false);
+    update();
+}
+
 void CircularGauge::onFlowTick()
 {
     m_phase += 0.018;
@@ -121,6 +131,11 @@ void CircularGauge::paintEvent(QPaintEvent *)
     const int thickness = qMax(9, int(side * 0.085));
     const QPointF center(width() / 2.0, height() / 2.0);
 
+    // 未启用时整表降为灰色：只改这一处颜色源，后面的弧/刻度/单位全跟着变
+    const QColor accent = m_dimmed ? Theme::TextMuted : m_accent;
+    const QColor valueColor = m_dimmed ? Theme::TextMuted : Theme::TextPrimary;
+    const QColor captionColor = m_dimmed ? Theme::TextMuted : Theme::TextSecondary;
+
     const int outer = side - thickness - 8;
     const QRectF arcRect(center.x() - outer / 2.0, center.y() - outer / 2.0, outer, outer);
 
@@ -135,7 +150,7 @@ void CircularGauge::paintEvent(QPaintEvent *)
         const double rad = qDegreesToRadians(deg);
         const QPointF a(center.x() + tickOuter * qCos(rad), center.y() - tickOuter * qSin(rad));
         const QPointF b(center.x() + tickInner * qCos(rad), center.y() - tickInner * qSin(rad));
-        QColor c = (i <= filledTicks) ? m_accent : Theme::Track;
+        QColor c = (i <= filledTicks) ? accent : Theme::Track;
         c.setAlpha(i <= filledTicks ? 165 : 255);
         p.setPen(QPen(c, tickWidth, Qt::SolidLine, Qt::RoundCap));
         p.drawLine(a, b);
@@ -152,17 +167,20 @@ void CircularGauge::paintEvent(QPaintEvent *)
     {
         const int span = int(kSpanAngle * 16 * m_value / 100.0);
 
-        QColor glow = m_accent;
-        glow.setAlpha(55);
-        p.setPen(QPen(glow, thickness + 10, Qt::SolidLine, Qt::RoundCap));
-        p.drawArc(arcRect, kStartAngle * 16, span);
+        if (!m_dimmed)
+        {
+            QColor glow = accent;
+            glow.setAlpha(55);
+            p.setPen(QPen(glow, thickness + 10, Qt::SolidLine, Qt::RoundCap));
+            p.drawArc(arcRect, kStartAngle * 16, span);
+        }
 
         QConicalGradient grad(center, kStartAngle);
-        QColor dark = m_accent;
-        dark.setAlpha(150);
+        QColor dark = accent;
+        dark.setAlpha(m_dimmed ? 120 : 150);
         grad.setColorAt(0.0, dark);
-        grad.setColorAt(qBound(0.0, m_value / 100.0, 1.0), m_accent);
-        grad.setColorAt(1.0, m_accent);
+        grad.setColorAt(qBound(0.0, m_value / 100.0, 1.0), accent);
+        grad.setColorAt(1.0, accent);
         p.setPen(QPen(QBrush(grad), thickness, Qt::SolidLine, Qt::RoundCap));
         p.drawArc(arcRect, kStartAngle * 16, span);
     }
@@ -208,12 +226,12 @@ void CircularGauge::paintEvent(QPaintEvent *)
     const int baselineTop = int(center.y() - vfm.height() / 2.0);
 
     p.setFont(valueFont);
-    p.setPen(Theme::TextPrimary);
+    p.setPen(valueColor);
     p.drawText(QRect(int(center.x() - blockW / 2.0), baselineTop, valueW, vfm.height()),
                Qt::AlignLeft | Qt::AlignVCenter, valueText);
 
     p.setFont(unitFont);
-    QColor unitColor = m_accent;
+    QColor unitColor = accent;
     unitColor.setAlpha(220);
     p.setPen(unitColor);
     p.drawText(QRect(int(center.x() - blockW / 2.0) + valueW + 3, baselineTop + vfm.height() / 2,
@@ -225,7 +243,7 @@ void CircularGauge::paintEvent(QPaintEvent *)
         QFont cf = font();
         cf.setPixelSize(qMax(11, int(side * 0.072)));
         p.setFont(cf);
-        p.setPen(Theme::TextSecondary);
+        p.setPen(captionColor);
         p.drawText(QRect(0, int(center.y() - side * 0.36), width(), int(side * 0.16)),
                    Qt::AlignHCenter | Qt::AlignVCenter, m_caption);
     }

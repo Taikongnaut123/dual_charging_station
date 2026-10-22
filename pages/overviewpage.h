@@ -37,13 +37,18 @@ private:
     Card *buildCurveCard();
     void applyState(StationController::State state);
 
+    /** 刷新一个充电口：数值 + 启用/未启用外观（手动/自动共用一份逻辑） */
+    void updatePort(bool manual, const MdcData &d);
+
     StationController *m_ctl = nullptr;
 
     /** 一个充电口的控件集合 */
     struct PortWidgets
     {
+        Card *card = nullptr;       // 整卡，置灰靠它的动态属性 link=on/off
         CircularGauge *gauge = nullptr;
         QLabel *badge = nullptr;
+        QLabel *hint = nullptr;     // 未启用提示，仅 link_status=0 时显示
         QLabel *voltage = nullptr;
         QLabel *chargeCurrent = nullptr;
         QLabel *dischargeCurrent = nullptr;
