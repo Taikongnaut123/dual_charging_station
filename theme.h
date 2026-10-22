@@ -58,6 +58,16 @@ namespace Theme
     qreal geoScale();
     qreal fontScale();
 
+    /**
+     * 字号总闸门：叠在 fontScale 之上，只影响字号、不影响间距。
+     *
+     * 想“整个界面的字都大一点”就调这一个值（或运行时 --text-scale），
+     * 不要再去逐个改样式表里的 font-size——那样很容易搞出一堆
+     * 13px 和 22px 混排的层级。默认 1.0。
+     */
+    void setTextBoost(qreal boost);
+    qreal textBoost();
+
     /** 把设计稿里的像素值换算成当前屏幕下的像素值 */
     int px(int designPx);
 

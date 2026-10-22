@@ -8,6 +8,7 @@
 
 namespace
 {
+    // 设计稿像素值；实际绘制时统一过 Theme::px()
     const double kSidePad = 34.0;
     const double kDotY = 13.0;
 } // namespace
@@ -58,12 +59,12 @@ void StageTimeline::reset()
 
 QSize StageTimeline::sizeHint() const
 {
-    return QSize(380, 52);
+    return QSize(Theme::px(380), Theme::px(52));
 }
 
 QSize StageTimeline::minimumSizeHint() const
 {
-    return QSize(200, 46);
+    return QSize(Theme::px(200), Theme::px(46));
 }
 
 void StageTimeline::paintEvent(QPaintEvent *)
@@ -76,24 +77,26 @@ void StageTimeline::paintEvent(QPaintEvent *)
     p.setRenderHint(QPainter::Antialiasing, true);
 
     QFont labelFont = font();
-    labelFont.setPixelSize(11);
+    // 自绘控件：字号要走 Theme::fontPx，否则不跟随全局字号缩放
+    labelFont.setPixelSize(Theme::fontPx(13));
 
-    const double span = width() - kSidePad * 2.0;
+    const double span = width() - Theme::px(kSidePad) * 2.0;
     QVector<double> xs;
     xs.reserve(n);
     for (int i = 0; i < n; ++i)
-        xs << kSidePad + span * i / double(n - 1);
+        xs << Theme::px(kSidePad) + span * i / double(n - 1);
 
     const QColor active = m_faulted ? Theme::Red : m_accent;
 
     // ---- 连接线 ----
-    p.setPen(QPen(Theme::Track, 3, Qt::SolidLine, Qt::RoundCap));
-    p.drawLine(QPointF(xs.first(), kDotY), QPointF(xs.last(), kDotY));
+    p.setPen(QPen(Theme::Track, Theme::px(3), Qt::SolidLine, Qt::RoundCap));
+    p.drawLine(QPointF(xs.first(), Theme::px(kDotY)), QPointF(xs.last(), Theme::px(kDotY)));
 
     if (m_reached >= 1)
     {
-        p.setPen(QPen(active, 3, Qt::SolidLine, Qt::RoundCap));
-        p.drawLine(QPointF(xs.first(), kDotY), QPointF(xs[qMin(m_reached, n - 1)], kDotY));
+        p.setPen(QPen(active, Theme::px(3), Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(QPointF(xs.first(), Theme::px(kDotY)),
+                   QPointF(xs[qMin(m_reached, n - 1)], Theme::px(kDotY)));
     }
 
     // ---- 节点 + 文字 ----
@@ -102,6 +105,7 @@ void StageTimeline::paintEvent(QPaintEvent *)
     {
         const bool done = (i <= m_reached);
         const bool current = (i == m_current);
+        const double dotY = Theme::px(kDotY);
 
         if (current)
         {
@@ -109,17 +113,18 @@ void StageTimeline::paintEvent(QPaintEvent *)
             glow.setAlpha(60);
             p.setPen(Qt::NoPen);
             p.setBrush(glow);
-            p.drawEllipse(QPointF(xs[i], kDotY), 9.0, 9.0);
+            p.drawEllipse(QPointF(xs[i], dotY), Theme::px(9.0), Theme::px(9.0));
         }
 
         p.setPen(Qt::NoPen);
         p.setBrush(done ? active : Theme::Track);
-        p.drawEllipse(QPointF(xs[i], kDotY), current ? 5.5 : 4.5, current ? 5.5 : 4.5);
+        p.drawEllipse(QPointF(xs[i], dotY),
+                      Theme::px(current ? 5.5 : 4.5), Theme::px(current ? 5.5 : 4.5));
 
         if (current)
         {
             p.setBrush(QColor(255, 255, 255, 220));
-            p.drawEllipse(QPointF(xs[i], kDotY), 2.0, 2.0);
+            p.drawEllipse(QPointF(xs[i], dotY), Theme::px(2.0), Theme::px(2.0));
         }
 
         QColor textColor = Theme::TextMuted;
@@ -129,7 +134,8 @@ void StageTimeline::paintEvent(QPaintEvent *)
             textColor = active;
 
         p.setPen(textColor);
-        const QRectF box(xs[i] - 46.0, kDotY + 9.0, 92.0, 17.0);
+        const QRectF box(xs[i] - Theme::px(46.0), dotY + Theme::px(9.0),
+                         Theme::px(92.0), Theme::px(17.0));
         p.drawText(box, Qt::AlignHCenter | Qt::AlignVCenter, m_labels.at(i));
     }
 }

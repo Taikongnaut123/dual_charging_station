@@ -87,7 +87,11 @@ int main(int argc, char *argv[])
     // 现场如果觉得字偏大/偏小，不用改代码重编，直接调这个系数即可
     QCommandLineOption uiScaleOption(
         QStringLiteral("ui-scale"),
-        QStringLiteral("强制指定界面缩放系数（默认按屏幕分辨率自动计算）"),
+        QStringLiteral("强制指定界面缩放系数（含间距、控件尺寸；默认按屏幕分辨率自动计算）"),
+        QStringLiteral("scale"));
+    QCommandLineOption textScaleOption(
+        QStringLiteral("text-scale"),
+        QStringLiteral("只放大/缩小字号，不动间距（默认 1.15；嫌字小就调到 1.25）"),
         QStringLiteral("scale"));
 
     parser.addOption(fullscreenOption);
@@ -95,6 +99,7 @@ int main(int argc, char *argv[])
     parser.addOption(statPortOption);
     parser.addOption(verboseOption);
     parser.addOption(uiScaleOption);
+    parser.addOption(textScaleOption);
     parser.process(app);
 
     // ------------------------------------------------------------------
@@ -133,6 +138,20 @@ int main(int argc, char *argv[])
     }
     const qreal fontScale = qBound(0.8, std::sqrt(geoScale), 1.0);
     Theme::setUiScale(geoScale, fontScale);
+
+    // 字号总闸门。样式表里的字号都是设计稿值，这里一次性放大，
+    // 不用去改几十个 font-size。间距不跟着走（那是 geoScale 的事）。
+    qreal textBoost = 1.15;
+    if (parser.isSet(textScaleOption))
+    {
+        bool ok = false;
+        const qreal v = parser.value(textScaleOption).toDouble(&ok);
+        if (ok && v > 0.5 && v <= 2.5)
+            textBoost = v;
+        else
+            qWarning("--text-scale 参数无效，用默认值");
+    }
+    Theme::setTextBoost(textBoost);
 
     // 中文界面下默认字号略小一号，具体尺寸由样式表控制
     QFont appFont = app.font();

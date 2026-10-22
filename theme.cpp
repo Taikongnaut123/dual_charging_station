@@ -11,12 +11,23 @@ namespace Theme
     {
         qreal g_geoScale = 1.0;
         qreal g_fontScale = 1.0;
+        qreal g_textBoost = 1.0;
     }
 
     void setUiScale(qreal geoScale, qreal fontScale)
     {
         g_geoScale = qBound(0.3, geoScale, 2.0);
         g_fontScale = qBound(0.3, fontScale, 2.0);
+    }
+
+    void setTextBoost(qreal boost)
+    {
+        g_textBoost = qBound(0.6, boost, 2.5);
+    }
+
+    qreal textBoost()
+    {
+        return g_textBoost;
     }
 
     qreal geoScale()
@@ -36,7 +47,7 @@ namespace Theme
 
     int fontPx(int designPx)
     {
-        return qMax(1, qRound(designPx * g_fontScale));
+        return qMax(1, qRound(designPx * g_fontScale * g_textBoost));
     }
 
     void repolish(QWidget *widget)
@@ -151,8 +162,10 @@ QLabel#clockTime { color: @TEXT@; font-size: 26px; font-weight: 700; }
 QLabel#clockDate { color: @TEXT3@; font-size: 13px; }
 
 /* ---------------- 正文 ---------------- */
-QLabel#heroState  { font-size: 30px; font-weight: 700; }
-QLabel#heroSub    { color: @TEXT2@; font-size: 15px; }
+/* 注意：objectName 必须和代码里一致。这里之前写的是 heroState，而代码用的是
+ * bigState（总览页的“充电中”、充电桩状态页的“到位完成”），导致这条规则从
+ * 来没生效过——那些大字一直用的是 app 默认字体（10pt）。 */
+QLabel#bigState    { font-size: 30px; font-weight: 700; }
 QLabel#sectionLabel { color: @TEXT3@; font-size: 13px; font-weight: 600; }
 QLabel#rowKey     { color: @TEXT2@; font-size: 15px; }
 QLabel#rowVal     { color: @TEXT@;  font-size: 19px; font-weight: 600; }
@@ -385,7 +398,8 @@ QCheckBox::indicator:checked { background: @GREEN@; border-color: @GREEN@; }
         // ---- 按屏幕缩放：样式表里的 px 全部按设计稿像素处理 ----
         // font-size 用字号系数（缩得少），其余（padding/radius/border/宽高）
         // 用几何系数。逐行处理，因为每条 font-size 声明都独占一行。
-        if (!qFuzzyCompare(g_geoScale, 1.0) || !qFuzzyCompare(g_fontScale, 1.0))
+        if (!qFuzzyCompare(g_geoScale, 1.0) || !qFuzzyCompare(g_fontScale, 1.0) ||
+            !qFuzzyCompare(g_textBoost, 1.0))
         {
             static const QRegularExpression pxRe(QStringLiteral("(\\d+)px"));
             QStringList lines = css.split(QLatin1Char('\n'));
@@ -393,8 +407,9 @@ QCheckBox::indicator:checked { background: @GREEN@; border-color: @GREEN@; }
             {
                 if (!line.contains(QLatin1String("px")))
                     continue;
-                const qreal k = line.contains(QLatin1String("font-size")) ? g_fontScale
-                                                                          : g_geoScale;
+                const qreal k = line.contains(QLatin1String("font-size"))
+                                    ? g_fontScale * g_textBoost
+                                    : g_geoScale;
                 if (qFuzzyCompare(k, 1.0))
                     continue;
 
