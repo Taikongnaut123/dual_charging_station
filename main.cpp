@@ -4,6 +4,7 @@
 #include <QApplication>
 #include <QCommandLineOption>
 #include <QCommandLineParser>
+#include <QFile>
 #include <QLocale>
 #include <QScreen>
 #include <QStyleFactory>
@@ -12,6 +13,67 @@
 
 #include <cmath>
 #include <cstdio>
+
+namespace
+{
+    /**
+     * 当前 DISPLAY 能不能用。
+     *
+     * 一体屏上常见两种情况：
+     *   · 根本没起 X，但环境里还残留 DISPLAY=:0（从桌面 shell 继承/默认值）
+     *   · 起了 X，但 root 没有 Xauthority，连不上
+     * 这里只看“本地 display 的 socket 在不在”，判不了的（远程 host:0）
+     * 一律交给 Qt 自己处理。
+     */
+    bool xDisplayLooksUsable()
+    {
+        const QByteArray display = qgetenv("DISPLAY");
+        if (display.isEmpty())
+            return false;
+
+        const int colon = display.indexOf(':');
+        if (colon < 0)
+            return false;
+        if (colon > 0)
+            return true; // host:0 这种远程 display，本地判断不了
+
+        // ":0" / ":0.0" -> 查 /tmp/.X11-unix/X0
+        const QByteArray num = display.mid(1).split('.').first();
+        bool ok = false;
+        const int n = num.toInt(&ok);
+        if (!ok)
+            return false;
+        return QFile::exists(QStringLiteral("/tmp/.X11-unix/X%1").arg(n));
+    }
+
+    /**
+     * 没 X 就自动走 framebuffer。
+     *
+     * 板子上直接从串口/SSH 启程序时，Qt 的 xcb 插件会因为连不上 :0 直接
+     * abort —— 而那块屏就在那儿，只是没跑 X 而已。有 /dev/fb0 就直接用
+     * linuxfb，把“能不能跑起来”这件事和环境解耦。
+     *
+     * 外部显式设了 QT_QPA_PLATFORM 就完全不动。
+     */
+    void pickPlatformFallback()
+    {
+        if (!qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM"))
+            return;
+        if (xDisplayLooksUsable())
+            return;
+        if (!QFile::exists(QStringLiteral("/dev/fb0")))
+            return;
+
+        qputenv("QT_QPA_PLATFORM", "linuxfb");
+        // framebuffer 上不需要那个鼠标指针，画面上留个箭头很难看
+        if (qEnvironmentVariableIsEmpty("QT_QPA_FB_HIDECURSOR"))
+            qputenv("QT_QPA_FB_HIDECURSOR", "1");
+        std::fprintf(stderr,
+                     "[显示] 没有可用的 X（DISPLAY=%s），改用 framebuffer（linuxfb）\n",
+                     qgetenv("DISPLAY").constData());
+        std::fflush(stderr);
+    }
+} // namespace
 
 int main(int argc, char *argv[])
 {
@@ -31,6 +93,9 @@ int main(int argc, char *argv[])
     // ------------------------------------------------------------------
     if (qEnvironmentVariableIsEmpty("QT_XCB_GL_INTEGRATION"))
         qputenv("QT_XCB_GL_INTEGRATION", "none");
+
+    // 同样必须早于 QApplication：平台插件是在构造时加载的
+    pickPlatformFallback();
 
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     // 工控屏普遍是高 DPI 小尺寸面板，开启缩放保证界面不糊

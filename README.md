@@ -87,6 +87,40 @@ tools/run_demo.sh --loopback   # 只起界面，用内置仿真数据，连 ROS2
 四周留黑边。所以 `MainWindow::enterFullScreen()` 会在 300ms 后比对一次实际几何，
 没铺满就自己 `setGeometry(屏幕大小)`。有 WM 时这段不会做任何事。
 
+### 没有 X 也能跑（自动回退 framebuffer）
+
+一体屏常常是"板子接了屏、但根本没跑 X"，而环境里还残留 `DISPLAY=:0`。
+这时 Qt 的 xcb 插件会直接 abort：
+
+```
+qt.qpa.xcb: could not connect to display :0
+This application failed to start because no Qt platform plugin could be initialized.
+```
+
+程序启动时会自己判断：`DISPLAY` 指向的本地 socket（`/tmp/.X11-unix/X<n>`）不存在、
+且 `/dev/fb0` 存在时，自动切到 **linuxfb** 并隐藏鼠标指针：
+
+```
+[显示] 没有可用的 X（DISPLAY=:0），改用 framebuffer（linuxfb）
+```
+
+所以直接跑就行，不用记环境变量：
+
+```bash
+./run_ui.sh -f
+```
+
+想强制指定的话（外部设了 `QT_QPA_PLATFORM` 就不会被覆盖）：
+
+```bash
+QT_QPA_PLATFORM=linuxfb ./run_ui.sh -f                 # 走 framebuffer
+QT_QPA_PLATFORM=linuxfb:fb=/dev/fb1 ./run_ui.sh -f     # 多屏时指定设备
+QT_QPA_PLATFORM=eglfs ./run_ui.sh -f                   # 有 GPU/DRM 且没跑 X 时更流畅
+```
+
+> 用 framebuffer 时注意两点：`/dev/fb0` 一般属 `root:video`，非 root 用户要加进
+> `video` 组；另外内核控制台日志会盖到画面上，可以 `dmesg -n 1` 降级。
+
 ### 链路三态（排障关键）
 
 页眉的链路胶囊有三种状态，能直接区分"桥没起来"和"设备没数据"：
