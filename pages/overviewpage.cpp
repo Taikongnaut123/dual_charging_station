@@ -102,11 +102,10 @@ Card *OverviewPage::buildPortCard(bool manual)
     row->addLayout(kv, 1);
     card->addLayout(row);
 
-    // 未启用提示：只有 link_status = 0 时显示。写清楚到底是哪一路没接，
-    // 并把原始字段名带上，现场对着协议文档一看就明白。
-    w.hint = new QLabel(manual
-                            ? QStringLiteral("手动充电线未连接（manual_link_status = 0），本口未启用")
-                            : QStringLiteral("自动充电连接未建立（auto_link_status = 0），本口未启用"));
+    // 未启用提示：只有口子没就绪时显示。
+    // 手动口是有线插接，一个条件；自动口是无线的，要"坐到位 + 贴合"两个条件，
+    // 文案在 updatePort() 里按实际情况填，因为两种原因排查方向完全不同。
+    w.hint = new QLabel;
     w.hint->setObjectName(QStringLiteral("portHint"));
     w.hint->setWordWrap(true);
     w.hint->setVisible(false);
@@ -178,19 +177,22 @@ Card *OverviewPage::buildCurveCard()
 void OverviewPage::updatePort(bool manual, const MdcData &d)
 {
     PortWidgets &w = manual ? m_man : m_auto;
-    const bool linked = manual ? d.manualLinked() : d.autoLinked();
+
+    // 手动口：有线插接，只看 manual_link_status。
+    // 自动口：无线充电，必须"机器人坐到位 + 充电口贴合"两个条件同时成立。
+    const bool ready = manual ? d.manualLinked() : d.autoReady();
     const bool charging = manual ? d.manualCharging() : d.autoCharging();
     const bool switchOn = manual ? d.manualSwitchOn() : d.autoSwitchOn();
 
     // 整卡置灰：QSS 靠动态属性 link 选择，改完必须 repolish 才生效
-    w.card->setProperty("link", linked ? QStringLiteral("on") : QStringLiteral("off"));
+    w.card->setProperty("link", ready ? QStringLiteral("on") : QStringLiteral("off"));
     Theme::repolish(w.card);
-    w.hint->setVisible(!linked);
-    w.gauge->setDimmed(!linked);
+    w.hint->setVisible(!ready);
+    w.gauge->setDimmed(!ready);
 
-    if (!linked)
+    if (!ready)
     {
-        // 没接线时把这六个字段清成 "--"：设备可能仍然上报上一块的残留值，
+        // 没就绪时把这六个字段清成 "--"：设备可能仍然上报上一块的残留值，
         // 直接显示会让人以为"这个口接着一块 0A 的电池"。
         w.badge->setText(QStringLiteral("未启用"));
         w.badge->setProperty("level", QStringLiteral("dim"));
@@ -200,6 +202,17 @@ void OverviewPage::updatePort(bool manual, const MdcData &d)
         for (QLabel *l : {w.voltage, w.chargeCurrent, w.dischargeCurrent,
                           w.temp, w.batteryId, w.chgSwitch})
             l->setText(QStringLiteral("--"));
+
+        // 自动口没就绪有两种截然不同的原因，分开说，别让人去查错方向
+        if (manual)
+            w.hint->setText(QStringLiteral(
+                "手动充电线未连接（manual_link_status = 0），本口未启用"));
+        else if (!d.hallTriggered())
+            w.hint->setText(QStringLiteral(
+                "机器人尚未坐到位（hall_switch = 0），自动充电口未启用"));
+        else
+            w.hint->setText(QStringLiteral(
+                "已坐到位但充电口未贴合（auto_link_status = 0），自动充电口未启用"));
         return;
     }
 
@@ -293,10 +306,10 @@ void OverviewPage::applyState(StationController::State state)
 
     // 离线时必须停掉环形表的流动动画：否则它会一直转，配合冻结的读数，
     // 看起来像是还在正常充电 —— 这是最误导的一种"假在线"。
-    // 同理，未启用的口（link_status = 0）也不该转。
+    // 同理，未就绪的口也不该转（自动口要坐到位且贴合）。
     const MdcData &d = m_ctl->data();
     m_man.gauge->setFlowing(live && d.manualLinked() && d.manualCharging());
-    m_auto.gauge->setFlowing(live && d.autoLinked() && d.autoCharging());
+    m_auto.gauge->setFlowing(live && d.autoReady() && d.autoCharging());
 }
 
 void OverviewPage::onStateChanged(StationController::State state)

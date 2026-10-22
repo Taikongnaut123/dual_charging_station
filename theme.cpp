@@ -78,7 +78,7 @@ QLabel#badge {
     border: 1px solid @CARD_BORDER@;
     border-radius: 9px;
     padding: 2px 9px;
-    font-size: 11px;
+    font-size: 20px;
     font-weight: 600;
 }
 QLabel#badge[level="ok"]   { color: @GREEN@;  border-color: rgba(34,197,94,90);   background: rgba(34,197,94,26); }

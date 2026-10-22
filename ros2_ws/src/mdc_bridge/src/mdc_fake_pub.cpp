@@ -76,6 +76,9 @@ public:
         //    0 都不启用        1 仅手动
         //    2 仅自动          3 都启用
         m_linkOverride = static_cast<int>(declare_parameter<int>("link_override", -1));
+        // 同上，霍尔开关默认跟随"车到位"（t >= 18s），可强制指定：
+        //   -1 跟随时间轴     0 强制未触发     1 强制已触发
+        m_hallOverride = static_cast<int>(declare_parameter<int>("hall_override", -1));
 
         RCLCPP_INFO(get_logger(), "假设备已启动：约 2Hz 发布 /mdc_data（周期 %.0f 秒）", kCycle);
         RCLCPP_INFO(get_logger(), "模拟流程：就位 -> 手动口充电 -> 空闲 -> 自动口充电 -> 空闲");
@@ -160,7 +163,8 @@ private:
             m.charge_state = 1; // 空闲
 
         m.fan_status = (manCharging || autoCharging || manFull || autoFull) ? 1 : 0;
-        m.hall_switch = (t >= 18.0) ? 1 : 0; // 车到位后霍尔触发
+        // 霍尔开关：机器人坐下后腹部与充电口贴合才触发，是自动充电的前置条件
+        m.hall_switch = (m_hallOverride >= 0) ? m_hallOverride : ((t >= 18.0) ? 1 : 0);
 
         // 两个口的"已连接"标志。真机由硬件给，这里默认跟随充电状态，
         // 需要单独验证界面时用 link_override 参数强制指定。
@@ -187,6 +191,7 @@ private:
     rclcpp::TimerBase::SharedPtr m_timer;
     rclcpp::Time m_t0;
     int m_linkOverride = -1;
+    int m_hallOverride = -1;
 };
 
 int main(int argc, char **argv)

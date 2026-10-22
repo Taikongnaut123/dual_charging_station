@@ -79,6 +79,20 @@ struct MdcData
     bool autoLinked() const { return autoLinkStatus != 0; }
     bool autoSwitchOn() const { return autoChgSwitch != 0; }
 
+    /** 霍尔开关：机器人已经坐到充电位上，腹部充电模块贴上充电口 */
+    bool hallTriggered() const { return hallSwitch != 0; }
+
+    /**
+     * 自动充电口是否"就绪"（可以开始自动充电）。
+     *
+     * 自动充电是无线的：机器人走到充电桩 -> 坐下 -> 腹部充电模块与充电口
+     * 贴合 -> 自动充电连接建立。所以必须**两个条件同时成立**：
+     *   hall_switch      机器人坐到位（霍尔开关触发）
+     *   auto_link_status 充电口已贴合、连接已建立
+     * 少任何一个都不该亮。手动口是有线插接，只看 manual_link_status。
+     */
+    bool autoReady() const { return hallTriggered() && autoLinked(); }
+
     // ---- 整体判定 ----
     /** 任意一个口在充电 */
     bool charging() const { return manualCharging() || autoCharging(); }
