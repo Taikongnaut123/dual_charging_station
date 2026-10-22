@@ -12,8 +12,8 @@ MetricTile::MetricTile(const QString &caption, QWidget *parent)
     setObjectName(QStringLiteral("tile"));
 
     auto *root = new QVBoxLayout(this);
-    root->setContentsMargins(12, 9, 12, 10);
-    root->setSpacing(3);
+    root->setContentsMargins(Theme::px(14), Theme::px(11), Theme::px(14), Theme::px(12));
+    root->setSpacing(Theme::px(4));
 
     m_caption = new QLabel(caption, this);
     m_caption->setObjectName(QStringLiteral("tileCaption"));
@@ -21,7 +21,7 @@ MetricTile::MetricTile(const QString &caption, QWidget *parent)
 
     auto *valueRow = new QHBoxLayout;
     valueRow->setContentsMargins(0, 0, 0, 0);
-    valueRow->setSpacing(4);
+    valueRow->setSpacing(Theme::px(6));
 
     m_value = new QLabel(QStringLiteral("--"), this);
     m_value->setObjectName(QStringLiteral("tileValue"));

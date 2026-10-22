@@ -13,12 +13,14 @@ Card::Card(const QString &title, QWidget *parent)
     setObjectName(QStringLiteral("card"));
 
     auto *root = new QVBoxLayout(this);
-    root->setContentsMargins(16, 13, 16, 15);
-    root->setSpacing(11);
+    // 注意要走 Theme::px()：之前这组数字是写死的，小屏下卡片内边距不跟着缩，
+    // 字缩了的时假看着还行，字一大就显挤。
+    root->setContentsMargins(Theme::px(18), Theme::px(15), Theme::px(18), Theme::px(17));
+    root->setSpacing(Theme::px(12));
 
     m_header = new QHBoxLayout;
     m_header->setContentsMargins(0, 0, 0, 0);
-    m_header->setSpacing(8);
+    m_header->setSpacing(Theme::px(10));
 
     m_title = new QLabel(title, this);
     m_title->setObjectName(QStringLiteral("cardTitle"));
@@ -28,7 +30,7 @@ Card::Card(const QString &title, QWidget *parent)
 
     m_content = new QVBoxLayout;
     m_content->setContentsMargins(0, 0, 0, 0);
-    m_content->setSpacing(9);
+    m_content->setSpacing(Theme::px(11));
     root->addLayout(m_content, 1);
 }
 

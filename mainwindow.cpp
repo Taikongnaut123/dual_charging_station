@@ -151,7 +151,7 @@ void MainWindow::buildUi()
     // 120px 也没用，只是页签变宽、文字照样只剩中间几个字）。
     // 数字是设计稿字号，实际会乘以 fontScale（1024×768 下约 ×0.87）。
     {
-        const int kTabFontDesignPx = 22;
+        const int kTabFontDesignPx = 18;
         QFont tabFont = m_tabs->tabBar()->font();
         tabFont.setPixelSize(Theme::fontPx(kTabFontDesignPx));
         tabFont.setBold(true);
@@ -193,6 +193,7 @@ QWidget *MainWindow::buildHeader()
     title->setObjectName(QStringLiteral("appTitle"));
     auto *sub = new QLabel(QStringLiteral("DUAL-WHEEL-LEGGED ROBOT CHARGING STATION · MDC"));
     sub->setObjectName(QStringLiteral("appSub"));
+    m_headerSub = sub;
     titleBox->addWidget(title);
     titleBox->addWidget(sub);
     lay->addLayout(titleBox);
@@ -279,6 +280,11 @@ void MainWindow::resizeEvent(QResizeEvent *event)
     // 窗口较窄时，底部那行提示会被挤压裁切，直接隐藏更干净
     if (m_footLastLog)
         m_footLastLog->setVisible(width() >= Theme::px(1180));
+
+    // 竖向也同理：字号放大后，标题下面那行英文副标题要占一整行高度。
+    // 屏幕不高的时候先舍它——它只是装饰，中文主标题已经说清楚了。
+    if (m_headerSub)
+        m_headerSub->setVisible(height() >= Theme::px(880));
 }
 
 void MainWindow::setupShortcuts()

@@ -74,7 +74,7 @@ QFrame#card {
 }
 QLabel#cardTitle {
     color: @TEXT2@;
-    font-size: 25px;
+    font-size: 18px;
     font-weight: 600;
 }
 QLabel#badge {
@@ -83,7 +83,7 @@ QLabel#badge {
     border: 1px solid @CARD_BORDER@;
     border-radius: 9px;
     padding: 2px 9px;
-    font-size: 20px;
+    font-size: 14px;
     font-weight: 600;
 }
 QLabel#badge[level="ok"]   { color: @GREEN@;  border-color: rgba(34,197,94,90);   background: rgba(34,197,94,26); }
@@ -97,7 +97,7 @@ QLabel#helpMark {
     background: @PANEL@;
     border: 1px solid @CARD_BORDER@;
     border-radius: 8px;
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 700;
     min-width: 16px;
     max-width: 16px;
@@ -115,7 +115,7 @@ QToolTip {
     background: @CARD@;
     border: 1px solid @CARD_BORDER@;
     padding: 6px 9px;
-    font-size: 12px;
+    font-size: 13px;
 }
 
 /* ---------------- 未启用的充电口（link_status = 0） ----------------
@@ -131,7 +131,7 @@ QFrame#card[link="off"] QLabel#rowKey,
 QFrame#card[link="off"] QLabel#rowVal { color: @TEXT3@; }
 
 /* 未启用提示：用琥珀色，和"故障红"区分开——没接电池不是故障 */
-QLabel#portHint { color: @AMBER@; font-size: 11px; }
+QLabel#portHint { color: @AMBER@; font-size: 13px; }
 
 /* ---------------- 数据小格子 ---------------- */
 QFrame#tile {
@@ -139,24 +139,24 @@ QFrame#tile {
     border: 1px solid @CARD_BORDER@;
     border-radius: 10px;
 }
-QLabel#tileCaption { color: @TEXT3@; font-size: 22px; }
+QLabel#tileCaption { color: @TEXT3@; font-size: 13px; }
 QLabel#tileValue   { color: @TEXT@;  font-size: 22px; font-weight: 700; }
-QLabel#tileUnit    { color: @TEXT2@; font-size: 22px; }
-QLabel#tileSub     { color: @TEXT3@; font-size: 12px; }
+QLabel#tileUnit    { color: @TEXT2@; font-size: 13px; }
+QLabel#tileSub     { color: @TEXT3@; font-size: 13px; }
 
 /* ---------------- 标题 / 时钟 ---------------- */
-QLabel#appTitle  { color: @TEXT@; font-size: 21px; font-weight: 700; }
-QLabel#appSub    { color: @TEXT3@; font-size: 11px; }
-QLabel#clockTime { color: @TEXT@; font-size: 25px; font-weight: 700; }
-QLabel#clockDate { color: @TEXT3@; font-size: 25px; }
+QLabel#appTitle  { color: @TEXT@; font-size: 24px; font-weight: 700; }
+QLabel#appSub    { color: @TEXT3@; font-size: 13px; }
+QLabel#clockTime { color: @TEXT@; font-size: 26px; font-weight: 700; }
+QLabel#clockDate { color: @TEXT3@; font-size: 13px; }
 
 /* ---------------- 正文 ---------------- */
 QLabel#heroState  { font-size: 30px; font-weight: 700; }
-QLabel#heroSub    { color: @TEXT2@; font-size: 22px; }
-QLabel#sectionLabel { color: @TEXT3@; font-size: 11px; font-weight: 600; }
-QLabel#rowKey     { color: @TEXT2@; font-size: 22px; }
-QLabel#rowVal     { color: @TEXT@;  font-size: 22px; font-weight: 600; }
-QLabel#rowValMono { color: @TEXT@;  font-size: 22px; font-weight: 600; font-family: "DejaVu Sans Mono", monospace; }
+QLabel#heroSub    { color: @TEXT2@; font-size: 15px; }
+QLabel#sectionLabel { color: @TEXT3@; font-size: 13px; font-weight: 600; }
+QLabel#rowKey     { color: @TEXT2@; font-size: 15px; }
+QLabel#rowVal     { color: @TEXT@;  font-size: 19px; font-weight: 600; }
+QLabel#rowValMono { color: @TEXT@;  font-size: 19px; font-weight: 600; font-family: "DejaVu Sans Mono", monospace; }
 
 /* ---------------- 顶部状态胶囊 ---------------- */
 QLabel#pill {
@@ -165,7 +165,7 @@ QLabel#pill {
     border: 1px solid @CARD_BORDER@;
     border-radius: 13px;
     padding: 4px 13px;
-    font-size: 22px;
+    font-size: 15px;
     font-weight: 600;
 }
 QLabel#pill[level="ok"]   { color: @GREEN@;  border-color: rgba(34,197,94,80);   background: rgba(34,197,94,24); }
@@ -199,7 +199,7 @@ QPushButton {
     border-radius: 12px;
     padding: 0 20px;
     min-height: 46px;
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 600;
 }
 QPushButton:hover   { background: #16233A; border-color: #33507A; }
@@ -236,7 +236,7 @@ QPushButton#miniBtn {
     max-height: 26px;
     padding: 0 14px;
     border-radius: 8px;
-    font-size: 12px;
+    font-size: 13px;
     color: @TEXT2@;
     background: transparent;
 }
@@ -248,7 +248,7 @@ QListWidget#logList {
     border: none;
     outline: none;
     color: @TEXT2@;
-    font-size: 18px;
+    font-size: 16px;
 }
 QListWidget#logList::item {
     padding: 5px 2px;
@@ -266,7 +266,7 @@ QScrollBar::handle:vertical:hover { background: #33507A; }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
 
-QLabel#footer { color: @TEXT3@; font-size: 11px; }
+QLabel#footer { color: @TEXT3@; font-size: 13px; }
 
 /* ---------------- 页签 ---------------- */
 QTabWidget#mainTabs::pane {

@@ -48,7 +48,7 @@ void OverviewPage::buildUi()
 {
     auto *grid = new QGridLayout(this);
     grid->setContentsMargins(0, 0, 0, 0);
-    grid->setSpacing(Theme::px(12));
+    grid->setSpacing(Theme::px(7));
 
     grid->addWidget(buildPortCard(true), 0, 0);
     grid->addWidget(buildPortCard(false), 0, 1);
@@ -72,7 +72,7 @@ Card *OverviewPage::buildPortCard(bool manual)
 
     // 左：SOC 环形表；右：六项指标
     auto *row = new QHBoxLayout;
-    row->setSpacing(Theme::px(14));
+    row->setSpacing(Theme::px(18));
 
     w.gauge = new CircularGauge;
     w.gauge->setFixedSize(Theme::px(150), Theme::px(150));
@@ -82,7 +82,7 @@ Card *OverviewPage::buildPortCard(bool manual)
     row->addWidget(w.gauge);
 
     auto *kv = new QVBoxLayout;
-    kv->setSpacing(Theme::px(6));
+    kv->setSpacing(Theme::px(9));
 
     w.voltage = plainValue();
     w.chargeCurrent = plainValue();
@@ -140,9 +140,9 @@ Card *OverviewPage::buildSummaryCard()
 
     m_tileEnergy->setUnit(QStringLiteral("kWh"));
     m_tileTotalEnergy->setUnit(QStringLiteral("kWh"));
-    m_tileEnergy->setSubText(QStringLiteral("本地统计"));
-    m_tileTotalEnergy->setSubText(QStringLiteral("本地统计"));
-    m_tileRemain->setSubText(QStringLiteral("按当前功率估算"));
+    // 副标题（“本地统计”“按当前功率估算”）不显示了：字号放大后
+    // 每个 tile 多一行就要多占近 20px，六个 tile 排一行把曲线图挤出了屏幕。
+    // 这两句信息已经写在标题旁的 “?” 里，不再重复占空间。
 
     auto *grid = new QGridLayout;
     grid->setContentsMargins(0, 0, 0, 0);
@@ -157,9 +157,11 @@ Card *OverviewPage::buildSummaryCard()
         grid->setColumnStretch(i, 1);
     card->addLayout(grid);
 
-    card->addWidget(noteLabel(QStringLiteral(
-        "充电模式 0待机/1手动/2自动；充电状态 0故障/1空闲/2充电中/3充满。"
-        "「本次」「累计」与预计剩余均为本机统计/估算，协议里没有这些字段。")));
+    // 这里原本还有一行长脚注（充电模式/状态取值 + “本机统计”说明）。
+    // 现在已经有两处覆盖同样的信息：
+    //   1) 标题旁的 “?” 悬停说明里写了取值含义；
+    //   2) 每个估算值的 tile 上都标了“本地统计/按当前功率估算”。
+    // 字号放大后这行要占 2～3 行高，直接去掉，给下面的曲线卡腾地方。
     return card;
 }
 
@@ -169,7 +171,7 @@ Card *OverviewPage::buildCurveCard()
     card->setBadge(QStringLiteral("最近 90 秒"), QStringLiteral("info"));
 
     m_chart = new ChargeCurveChart;
-    m_chart->setMinimumHeight(Theme::px(210));
+    m_chart->setMinimumHeight(Theme::px(110));
     m_chart->setSeries(QStringLiteral("手动口"), QStringLiteral("A"),
                        QStringLiteral("自动口"), QStringLiteral("A"));
     m_chart->setEmptyText(QStringLiteral("等待数据 ..."));
