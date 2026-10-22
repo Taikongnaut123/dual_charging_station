@@ -5,6 +5,7 @@
 #include <QCommandLineOption>
 #include <QCommandLineParser>
 #include <QFile>
+#include <QGuiApplication>
 #include <QLocale>
 #include <QScreen>
 #include <QStyleFactory>
@@ -298,7 +299,14 @@ int main(int argc, char *argv[])
         statTimer->start(2000);
     }
 
-    if (parser.isSet(fullscreenOption))
+    // linuxfb / eglfs 是"裸屏"：没有窗口管理器，也就没有"窗口"这个概念，
+    // 不铺满就是四周（或底部）留黑边。这类平台不传 -f 也直接全屏。
+    const QString platform = QGuiApplication::platformName();
+    const bool bareScreen = (platform == QLatin1String("linuxfb") ||
+                             platform == QLatin1String("eglfs") ||
+                             platform == QLatin1String("minimalegl"));
+
+    if (parser.isSet(fullscreenOption) || bareScreen)
         window.enterFullScreen();
     else
         window.show();

@@ -110,7 +110,10 @@ This application failed to start because no Qt platform plugin could be initiali
 ./run_ui.sh -f
 ```
 
-想强制指定的话（外部设了 `QT_QPA_PLATFORM` 就不会被覆盖）：
+另外 **linuxfb / eglfs 这两种"裸屏"平台下会自动全屏**，连 `-f` 都可以不写——
+这两个平台没有窗口管理器的概念，不铺满就是四周留黑边。
+
+想强制指定平台的话（外部设了 `QT_QPA_PLATFORM` 就不会被覆盖）：
 
 ```bash
 QT_QPA_PLATFORM=linuxfb ./run_ui.sh -f                 # 走 framebuffer

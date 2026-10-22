@@ -87,12 +87,13 @@ MainWindow::MainWindow(QWidget *parent)
     if (const QScreen *screen = QGuiApplication::primaryScreen())
     {
         const QSize avail = screen->availableGeometry().size();
-        appendLog(0, QStringLiteral("界面缩放：屏幕 %1×%2，几何系数 %3，字号系数 %4"
-                                    "（设计稿 %5×%6）")
+        appendLog(0, QStringLiteral("界面缩放：屏幕 %1×%2，几何系数 %3，字号系数 %4，"
+                                    "平台 %5（设计稿 %6×%7）")
                          .arg(avail.width())
                          .arg(avail.height())
                          .arg(Theme::geoScale(), 0, 'f', 2)
                          .arg(Theme::fontScale(), 0, 'f', 2)
+                         .arg(QGuiApplication::platformName())
                          .arg(Theme::kDesignWidth)
                          .arg(Theme::kDesignHeight));
     }
