@@ -34,6 +34,11 @@ namespace Theme
         return qMax(1, qRound(designPx * g_geoScale));
     }
 
+    int fontPx(int designPx)
+    {
+        return qMax(1, qRound(designPx * g_fontScale));
+    }
+
     void repolish(QWidget *widget)
     {
         if (!widget)
@@ -69,7 +74,7 @@ QFrame#card {
 }
 QLabel#cardTitle {
     color: @TEXT2@;
-    font-size: 13px;
+    font-size: 25px;
     font-weight: 600;
 }
 QLabel#badge {
@@ -134,24 +139,24 @@ QFrame#tile {
     border: 1px solid @CARD_BORDER@;
     border-radius: 10px;
 }
-QLabel#tileCaption { color: @TEXT3@; font-size: 11px; }
-QLabel#tileValue   { color: @TEXT@;  font-size: 19px; font-weight: 700; }
-QLabel#tileUnit    { color: @TEXT2@; font-size: 11px; }
-QLabel#tileSub     { color: @TEXT3@; font-size: 11px; }
+QLabel#tileCaption { color: @TEXT3@; font-size: 22px; }
+QLabel#tileValue   { color: @TEXT@;  font-size: 22px; font-weight: 700; }
+QLabel#tileUnit    { color: @TEXT2@; font-size: 22px; }
+QLabel#tileSub     { color: @TEXT3@; font-size: 12px; }
 
 /* ---------------- 标题 / 时钟 ---------------- */
 QLabel#appTitle  { color: @TEXT@; font-size: 21px; font-weight: 700; }
 QLabel#appSub    { color: @TEXT3@; font-size: 11px; }
 QLabel#clockTime { color: @TEXT@; font-size: 25px; font-weight: 700; }
-QLabel#clockDate { color: @TEXT3@; font-size: 11px; }
+QLabel#clockDate { color: @TEXT3@; font-size: 25px; }
 
 /* ---------------- 正文 ---------------- */
 QLabel#heroState  { font-size: 30px; font-weight: 700; }
-QLabel#heroSub    { color: @TEXT2@; font-size: 13px; }
+QLabel#heroSub    { color: @TEXT2@; font-size: 22px; }
 QLabel#sectionLabel { color: @TEXT3@; font-size: 11px; font-weight: 600; }
-QLabel#rowKey     { color: @TEXT2@; font-size: 12px; }
-QLabel#rowVal     { color: @TEXT@;  font-size: 12px; font-weight: 600; }
-QLabel#rowValMono { color: @TEXT@;  font-size: 12px; font-weight: 600; font-family: "DejaVu Sans Mono", monospace; }
+QLabel#rowKey     { color: @TEXT2@; font-size: 22px; }
+QLabel#rowVal     { color: @TEXT@;  font-size: 22px; font-weight: 600; }
+QLabel#rowValMono { color: @TEXT@;  font-size: 22px; font-weight: 600; font-family: "DejaVu Sans Mono", monospace; }
 
 /* ---------------- 顶部状态胶囊 ---------------- */
 QLabel#pill {
@@ -160,7 +165,7 @@ QLabel#pill {
     border: 1px solid @CARD_BORDER@;
     border-radius: 13px;
     padding: 4px 13px;
-    font-size: 12px;
+    font-size: 22px;
     font-weight: 600;
 }
 QLabel#pill[level="ok"]   { color: @GREEN@;  border-color: rgba(34,197,94,80);   background: rgba(34,197,94,24); }
@@ -243,7 +248,7 @@ QListWidget#logList {
     border: none;
     outline: none;
     color: @TEXT2@;
-    font-size: 12px;
+    font-size: 18px;
 }
 QListWidget#logList::item {
     padding: 5px 2px;
@@ -279,8 +284,11 @@ QTabBar::tab {
     border-top-right-radius: 10px;
     padding: 8px 22px;
     margin-right: 6px;
-    font-size: 13px;
-    font-weight: 600;
+    /* 注意：这里**不能**写 font-size。QTabBar 的尺寸和文字绘制区域是按
+     * 控件字体算的，QSS 只改绘制字体、不改尺寸，字号一大文字就被裁，
+     * 加 padding 也没用（实测加到 120px 依然裁）。
+     * 页签字号在 mainwindow.cpp 里用 setFont 设，见 Theme::fontPx()。
+     */
 }
 QTabBar::tab:selected {
     color: @TEXT@;

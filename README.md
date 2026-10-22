@@ -455,6 +455,23 @@ ROS_LOG_DIR=/var/log/mdc ./run_bridge.sh
   新增界面代码时：设计稿里的像素值一律写成 `Theme::px(150)`，样式表里的 `px`
   由 `Theme::styleSheet()` 自动换算，**不要再写死数字**，否则小屏下那部分不会缩。
 
+- **例外：页签（`QTabBar`）的字号必须在代码里设**，不能写在 QSS 里。
+  Qt 5.15 在 QSS 下给 `QTabBar::tab` 写 `font-size`，只改了**绘制**用的字体，
+  而 tab 的尺寸和文字绘制区域仍按控件字体（小字号）计算，结果是文字被居中裁掉
+  两头——实测把 `padding` 从 22px 加到 120px 也没用，只是页签变宽、文字照样缺。
+  正确做法：
+
+  ```cpp
+  // mainwindow.cpp
+  QFont tabFont = m_tabs->tabBar()->font();
+  tabFont.setPixelSize(Theme::fontPx(22));   // 设计稿字号，自动乘 fontScale
+  tabFont.setBold(true);
+  m_tabs->tabBar()->setFont(tabFont);
+  ```
+
+  同理，其它**自己算尺寸的复合控件**（如果有）也优先用 `setFont`+`Theme::fontPx()`
+  而不是 QSS 的 `font-size`。
+
 ```bash
 # 8 寸 1024x768 一体屏全屏运行（自适应，无需额外参数）
 ./dual_charging_station -f

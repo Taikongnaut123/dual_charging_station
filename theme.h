@@ -61,6 +61,14 @@ namespace Theme
     /** 把设计稿里的像素值换算成当前屏幕下的像素值 */
     int px(int designPx);
 
+    /**
+     * 字号版：设计稿像素 × fontScale。
+     * 给那些**必须在代码里设字体**的控件用（例如 QTabBar，见下）：
+     * QSS 的 font-size 不会参与 QTabBar 的尺寸计算，字号一大文字就被裁，
+     * 只能用控件字体。
+     */
+    int fontPx(int designPx);
+
     /** 修改动态属性后重新应用样式（配合 QLabel[level="ok"] 之类的选择器） */
     void repolish(QWidget *widget);
 

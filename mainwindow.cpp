@@ -6,6 +6,7 @@
 #include "widgets/card.h"
 
 #include <QDateTime>
+#include <QFont>
 #include <QFrame>
 #include <QGuiApplication>
 #include <QHBoxLayout>
@@ -15,6 +16,7 @@
 #include <QScreen>
 #include <QScrollArea>
 #include <QShortcut>
+#include <QTabBar>
 #include <QTabWidget>
 #include <QTime>
 #include <QTimer>
@@ -142,6 +144,19 @@ void MainWindow::buildUi()
 
     m_tabs = new QTabWidget;
     m_tabs->setObjectName(QStringLiteral("mainTabs"));
+
+    // 页签字号必须在这里设，**不能**写在 QSS 里：
+    // QTabBar 的 sizeHint 和文字绘制区域都是按控件字体算的，QSS 的 font-size
+    // 只影响绘制字体、不影响尺寸，字一大文字就被裁掉（实测把 padding 加到
+    // 120px 也没用，只是页签变宽、文字照样只剩中间几个字）。
+    // 数字是设计稿字号，实际会乘以 fontScale（1024×768 下约 ×0.87）。
+    {
+        const int kTabFontDesignPx = 22;
+        QFont tabFont = m_tabs->tabBar()->font();
+        tabFont.setPixelSize(Theme::fontPx(kTabFontDesignPx));
+        tabFont.setBold(true);
+        m_tabs->tabBar()->setFont(tabFont);
+    }
     m_tabs->addTab(wrapInScrollArea(m_overviewPage), QStringLiteral("充电总览"));
     m_tabs->addTab(wrapInScrollArea(m_stationPage), QStringLiteral("充电桩状态"));
     m_tabs->addTab(buildLogPage(), QStringLiteral("运行日志"));
