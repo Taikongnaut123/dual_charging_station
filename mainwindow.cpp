@@ -110,11 +110,10 @@ void MainWindow::enterFullScreen()
     // 有 WM 时，showFullScreen() 已经把事情做完了；没有 WM 时窗口尺寸不会变。
     // 等一拍再比对，避免和 WM 抢同一个尺寸。
     QTimer::singleShot(300, this, [this]
-    {
+                       {
         const QScreen *s = screen() ? screen() : QGuiApplication::primaryScreen();
         if (s && geometry() != s->geometry())
-            setGeometry(s->geometry());
-    });
+            setGeometry(s->geometry()); });
 }
 
 void MainWindow::setLoopbackEnabled(bool on)

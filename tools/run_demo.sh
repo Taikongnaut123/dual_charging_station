@@ -50,6 +50,11 @@ source /opt/ros/humble/setup.bash
 # shellcheck disable=SC1091
 source "$WS/install/setup.bash"
 
+# 域 ID 对不上时本机演示同样收不到数据（域是隔离的），这里跟着文档默认 122
+ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-122}"
+export ROS_DOMAIN_ID
+echo "ROS_DOMAIN_ID = ${ROS_DOMAIN_ID}"
+
 PIDS=()
 cleanup() {
   echo

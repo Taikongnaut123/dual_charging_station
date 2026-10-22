@@ -58,7 +58,8 @@ QLabel *Card::setHelp(const QString &tooltipText)
 }
 
 QLabel *Card::setBadge(const QString &text, const QString &level)
-{    if (!m_badge)
+{
+    if (!m_badge)
     {
         m_badge = new QLabel(this);
         m_badge->setObjectName(QStringLiteral("badge"));

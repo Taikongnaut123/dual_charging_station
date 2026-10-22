@@ -35,3 +35,11 @@ source "/opt/ros/${ROS_DISTRO}/setup.bash"
 set -u
 
 export LD_LIBRARY_PATH="${PKG_ROOT}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+
+# ---------------------------------------------------------------- 域 ID
+# ROS2 的域是隔离的：域不同的两个节点，**在同一台机器上也互相看不见**，
+# 而且没有任何报错——现象就是"桥明明跑着，界面一帧都收不到"。
+# 接口文档规定用 122，这里默认对齐；接别的域自己 export 覆盖。
+ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-122}"
+export ROS_DOMAIN_ID
+echo "ROS_DOMAIN_ID = ${ROS_DOMAIN_ID}（默认 122，可用环境变量覆盖）"

@@ -258,25 +258,69 @@ ros2 run mdc_bridge mdc_fake_pub --ros-args -p link_override:=3 -p hall_override
 
 ## 8. 接真机
 
-### 8.1 前提
+### 8.1 真机上的环境
+
+在机器人上能这样看到数据，说明它用的是 ROS2 Humble + 域 **122**：
 
 ```bash
-# 节点在发数据吗？（约 2Hz）
-ros2 topic hz /mdc_data
+source /opt/ros/humble/setup.bash
+source /root/ros2_ws/install/setup.bash
+export ROS_DOMAIN_ID=122
 
-# 类型和我们的复刻包一致吗？
+ros2 topic hz /mdc_data          # 应该在 2Hz 左右
 ros2 interface show mdc_serial/msg/MdcData
 ```
 
-⚠️ **`ROS_DOMAIN_ID` 必须一致**。接口文档里用的是 **122**：
+这里 `source /root/ros2_ws/install/setup.bash` **只是给 `ros2` 命令行用的**
+（让它找到官方的 `mdc_serial` 消息包）。我们的桥不依赖它——`mdc_serial` 的
+接口库是随产物一起发的（`lib/` 目录，RPATH 已固定），所以桥不需要 source
+那个 workspace，也就不受机器人上 ROS 环境影响。
+
+### 8.2 两个必须对齐的东西
+
+**① `ROS_DOMAIN_ID`**
+
+域是隔离的：域不同的两个节点，**在同一台机器上也互相看不见**，而且没有任何
+报错——现象就是"桥明明在跑，界面一帧都收不到"。接口文档用 **122**。
+
+产物里的启动脚本已经默认对齐，不用手动 export：
 
 ```bash
-export ROS_DOMAIN_ID=122       # 桥和 mdc_node 都要
+# tools/pack/_ros_env.sh 里：ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-122}"
+./run_bridge.sh        # 启动时会打印 ROS_DOMAIN_ID = 122
 ```
 
-`ROS_DOMAIN_ID` 不同时，同一台机器上也是两个隔离的世界——现象是桥收不到数据。
+桥的启动日志里也会打印实际生效的域和 RMW 实现，排障先看这两行：
 
-### 8.2 启动
+```
+[mdc_bridge]:   ROS_DOMAIN_ID : 122
+[mdc_bridge]:   RMW           : 默认（rmw_fastrtps_cpp）
+```
+
+要接别的域就 `ROS_DOMAIN_ID=7 ./run_bridge.sh`。
+
+**② 消息定义**
+
+我们的 `ros2_ws/src/mdc_serial` 是**照文档复刻**的版本（官方包只在机器人上）。
+如果两者的字段名/顺序/类型有出入，DDS 层面的类型名相同、不会报错，但桥按自己
+的布局解析字节，结果就是**数值全乱**——这种问题很难一眼看出来，值得先核对：
+
+```bash
+# 官方定义
+source /opt/ros/humble/setup.bash && source /root/ros2_ws/install/setup.bash
+ros2 interface show mdc_serial/msg/MdcData > /tmp/official.txt
+
+# 我们的复刻定义（换成工程实际路径，注意要新开一个 shell）
+source /opt/ros/humble/setup.bash && source <工程>/ros2_ws/install/setup.bash
+ros2 interface show mdc_serial/msg/MdcData > /tmp/ours.txt
+
+diff -u /tmp/official.txt /tmp/ours.txt
+```
+
+无输出即一致。有差异就按官方定义改 `ros2_ws/src/mdc_serial/msg/MdcData.msg`，
+重新 `colcon build` 后再打包。
+
+### 8.3 启动
 
 ```bash
 # 屏上（或同机）
@@ -291,14 +335,15 @@ export ROS_DOMAIN_ID=122       # 桥和 mdc_node 都要
 ./run_bridge.sh --ros-args -p peer_host:=192.168.1.50 -p peer_port:=8891
 ```
 
-### 8.3 QoS
+
+### 8.4 QoS
 
 桥和假设备都用 `SensorDataQoS()`（BEST_EFFORT）。在 DDS 里 **BEST_EFFORT 订阅者
 与 RELIABLE / BEST_EFFORT 两种发布者都兼容**；而 RELIABLE 订阅者遇到 BEST_EFFORT
 发布者会连不上，且没有明显报错（现象是"一帧都没有"）。设备遥测丢一两帧无所谓，
 兼容性更要紧，所以选了 BEST_EFFORT。
 
-### 8.4 排查顺序
+### 8.5 排查顺序
 
 按数据流逐跳验证，别跳步：
 
@@ -310,7 +355,7 @@ export ROS_DOMAIN_ID=122       # 桥和 mdc_node 都要
 ⑤ 界面 [统计] 帧在涨 --verbose       UDP 这一跳通了吗
 ```
 
-### 8.5 本地复刻的接口包
+### 8.6 本地复刻的接口包
 
 `ros2_ws/src/mdc_serial` 是依据 `doc/` **复刻**的。机器人上如果装了官方包，
 **以官方为准**：用官方包重新 `colcon build` 桥即可。两边 msg 必须完全一致，

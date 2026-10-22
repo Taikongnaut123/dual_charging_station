@@ -28,6 +28,7 @@
 #include <unistd.h>
 
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 
@@ -85,6 +86,17 @@ public:
         RCLCPP_INFO(get_logger(), "桥已启动（单向：只把设备数据转发给界面）");
         RCLCPP_INFO(get_logger(), "  订阅话题      : %s", topic.c_str());
         RCLCPP_INFO(get_logger(), "  状态发送目标  : UDP %s:%d", m_peerHost.c_str(), peerPort);
+
+        // 现场最常见的问题是 ROS_DOMAIN_ID 不一致：两个节点在同一台机器上也会
+        // 互相看不见，而且不报任何错。把实际生效的域打出来，省得靠猜。
+        const char *domainId = std::getenv("ROS_DOMAIN_ID");
+        const char *rmw = std::getenv("RMW_IMPLEMENTATION");
+        RCLCPP_INFO(get_logger(), "  ROS_DOMAIN_ID : %s",
+                    (domainId && *domainId)
+                        ? domainId
+                        : "0（未设置。真机是 122，对不上就一帧都收不到）");
+        RCLCPP_INFO(get_logger(), "  RMW           : %s",
+                    (rmw && *rmw) ? rmw : "默认（rmw_fastrtps_cpp）");
     }
 
     ~MdcBridge() override
