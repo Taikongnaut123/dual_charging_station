@@ -64,6 +64,7 @@ cp "$BRIDGE_DIR/mdc_fake_pub" "$STAGE/bin/"
 cp "$SERIAL_LIB_DIR"/libmdc_serial__*.so* "$STAGE/lib/"
 
 cp "$ROOT"/tools/pack/*.sh "$STAGE/"
+cp "$ROOT"/tools/pack/*.service.in "$STAGE/"
 chmod +x "$STAGE"/*.sh
 cp "$ROOT/README.md" "$STAGE/"
 
@@ -90,6 +91,7 @@ strip "$STAGE"/lib/*.so* 2>/dev/null || true
     echo "  run_bridge.sh               起桥（自动 source ROS 并设好库路径）"
     echo "  run_fake.sh                 起假设备"
     echo "  run_demo.sh                 一键起全套：假设备 + 桥 + 界面"
+    echo "  install_service.sh          注册成 systemd 服务（开机自启 + 崩溃重启）"
     echo
     echo "目标机依赖："
     echo "  【只跑界面】"
@@ -107,6 +109,7 @@ strip "$STAGE"/lib/*.so* 2>/dev/null || true
     echo "  ./run_demo.sh             # 无真机：假设备 + 桥 + 界面，整条链路"
     echo "  ./run_ui.sh --loopback    # 只要界面，用内置仿真数据"
     echo "  ./run_bridge.sh           # 只起桥（真机 mdc_node 已在运行）"
+    echo "  sudo ./install_service.sh # 注册成开机自启（推荐；界面+桥）"
     echo
     echo "注：lib/ 里是依据 doc/ 复刻的 mdc_serial 接口库。机器人上若装有官方"
     echo "    包，请以官方包为准，重新 colcon build 后替换。"

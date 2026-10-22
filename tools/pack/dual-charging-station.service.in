@@ -1,0 +1,29 @@
+[Unit]
+Description=双轮足机器人充电桩显示屏 (dual_charging_station)
+# 面板程序不需要网络，但桥要订阅 ROS2 话题，等网络起来更稳
+After=network.target
+# 崩了就让 systemd 一直拉起来，别让屏幕黑着没人管
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=@PKG_ROOT@
+ExecStart=@EXEC_LINE@
+Restart=always
+RestartSec=3
+
+# framebuffer 上没有鼠标，别把箭头画到屏上。
+# 如果你的板子有 X 并且想走 X，保持 QT_QPA_PLATFORM 不设即可——
+# 程序会自己判断：X 可用就走 xcb，不可用且有 /dev/fb0 就自动走 linuxfb。
+# 想强制指定就取消下面这行注释：
+#Environment=QT_QPA_PLATFORM=linuxfb
+Environment=QT_QPA_FB_HIDECURSOR=1
+
+# 日志统一进 journal，看的时候 journalctl -u dual-charging-station -f
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+# 纯 framebuffer 运行不需要图形会话，multi-user 就够。
+# 如果改成走 X（xcb），这里要换成 graphical.target
+WantedBy=multi-user.target

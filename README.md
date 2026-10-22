@@ -651,6 +651,40 @@ sudo apt install libgssapi3-heimdal
 
 一体屏开机自启通常把 `./run_ui.sh -f` 写进 systemd 或 `~/.xinitrc`。
 
+### 开机自启（systemd）
+
+产物里带了 `install_service.sh`，一条命令注册成服务：
+
+```bash
+sudo ./install_service.sh              # 界面 + 桥（推荐）
+sudo ./install_service.sh --ui-only    # 只起界面（桥在别处跑）
+sudo ./install_service.sh --bridge-only
+sudo ./install_service.sh --uninstall  # 卸载
+./install_service.sh --print           # 不安装，先看看会生成什么
+```
+
+生成的 unit 关键点：
+
+```ini
+ExecStart=<包目录>/run_demo.sh --no-fake    # 界面 + 桥，不起假设备
+Restart=always
+RestartSec=3                                # 崩了 3 秒后自动拉起
+Environment=QT_QPA_FB_HIDECURSOR=1          # 不显示鼠标箭头
+WantedBy=multi-user.target                  # 走 framebuffer，不需要图形会话
+```
+
+日常操作：
+
+```bash
+systemctl status   dual-charging-station
+systemctl restart  dual-charging-station     # 换热插/改配置后
+journalctl -u dual-charging-station -f       # 实时日志
+```
+
+> 为什么用 systemd 而不是 `~/.xinitrc`：面板是**设备**不是桌面，需要"开机就有、
+> 崩了自己起来、日志能查"。`~/.xinitrc` 只在有人登录图形界面时才跑。
+
+
 ### 端口
 
 只有一个端口需要关心：**界面的 `--stat-port`（默认 8891）**。
