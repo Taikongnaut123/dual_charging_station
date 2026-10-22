@@ -25,42 +25,42 @@
 namespace runlog
 {
 
-/** 可执行文件所在目录；取不到返回空串（用 /proc/self/exe，不受 argv[0] 影响） */
-inline std::string exeDir()
-{
-    char buf[4096];
-    const ssize_t n = ::readlink("/proc/self/exe", buf, sizeof(buf) - 1);
-    if (n <= 0)
-        return std::string();
-    buf[n] = '\0';
-
-    std::string path(buf);
-    const std::string::size_type pos = path.find_last_of('/');
-    return (pos == std::string::npos) ? std::string() : path.substr(0, pos);
-}
-
-/** 设置 ROS_LOG_DIR 默认值；返回最终生效的目录（可能为空，表示没改） */
-inline std::string useRunDirLogs()
-{
-    if (const char *env = std::getenv("ROS_LOG_DIR"))
+    /** 可执行文件所在目录；取不到返回空串（用 /proc/self/exe，不受 argv[0] 影响） */
+    inline std::string exeDir()
     {
-        if (*env != '\0')
-            return std::string(); // 外部指定了，尊重它
+        char buf[4096];
+        const ssize_t n = ::readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+        if (n <= 0)
+            return std::string();
+        buf[n] = '\0';
+
+        std::string path(buf);
+        const std::string::size_type pos = path.find_last_of('/');
+        return (pos == std::string::npos) ? std::string() : path.substr(0, pos);
     }
 
-    const std::string dir = exeDir();
-    if (dir.empty())
-        return std::string();
+    /** 设置 ROS_LOG_DIR 默认值；返回最终生效的目录（可能为空，表示没改） */
+    inline std::string useRunDirLogs()
+    {
+        if (const char *env = std::getenv("ROS_LOG_DIR"))
+        {
+            if (*env != '\0')
+                return std::string(); // 外部指定了，尊重它
+        }
 
-    const std::string logDir = dir + "/log";
-    if (::mkdir(logDir.c_str(), 0755) != 0 && errno != EEXIST)
-        return std::string();
-    if (::access(logDir.c_str(), W_OK) != 0)
-        return std::string();
+        const std::string dir = exeDir();
+        if (dir.empty())
+            return std::string();
 
-    ::setenv("ROS_LOG_DIR", logDir.c_str(), 1);
-    return logDir;
-}
+        const std::string logDir = dir + "/log";
+        if (::mkdir(logDir.c_str(), 0755) != 0 && errno != EEXIST)
+            return std::string();
+        if (::access(logDir.c_str(), W_OK) != 0)
+            return std::string();
+
+        ::setenv("ROS_LOG_DIR", logDir.c_str(), 1);
+        return logDir;
+    }
 
 } // namespace runlog
 

@@ -61,7 +61,8 @@ public:
         // ---------------------------------------------------------- 参数
         m_peerHost = declare_parameter<std::string>("peer_host", std::string("127.0.0.1"));
         const int peerPort = declare_parameter<int>("peer_port", mdcproto::kDefaultStatPort);
-        const std::string topic = declare_parameter<std::string>("topic", std::string("/mdc_data"));
+        m_topic = declare_parameter<std::string>("topic", std::string("/mdc_data"));
+        const std::string &topic = m_topic;
 
         // ---------------------------------------------------------- UDP
         if (!initUdp(peerPort))
@@ -84,6 +85,15 @@ public:
         m_hbTimer = create_wall_timer(std::chrono::seconds(1), [this]
                                       { sendHeartbeat(); });
 
+        // 5 秒一次的体检日志：发布者数量 / 累计帧数 / 发送失败数。
+        // DEBUG 级，平时不输出；排查时加 --ros-args --log-level debug 打开。
+        m_dbgTimer = create_wall_timer(std::chrono::seconds(5), [this]
+                                       { onDebugTick(); });
+
+        // "多久没有发布者"从启动就开始计，否则要等第一个 tick 才起步，
+        // 实际报警会比预期晚一整个周期。
+        m_noPubSinceMs = steadyMs();
+
         RCLCPP_INFO(get_logger(), "桥已启动（单向：只把设备数据转发给界面）");
         RCLCPP_INFO(get_logger(), "  订阅话题      : %s", topic.c_str());
         RCLCPP_INFO(get_logger(), "  状态发送目标  : UDP %s:%d", m_peerHost.c_str(), peerPort);
@@ -103,6 +113,9 @@ public:
         const char *logDir = std::getenv("ROS_LOG_DIR");
         RCLCPP_INFO(get_logger(), "  日志目录      : %s",
                     (logDir && *logDir) ? logDir : "默认（$HOME/.ros/log）");
+        RCLCPP_INFO(get_logger(), "  QoS           : SensorDataQoS（BEST_EFFORT，兼容 RELIABLE 发布者）");
+        RCLCPP_INFO(get_logger(),
+                    "提示：想看每帧细节和 5 秒一次统计，加 --ros-args --log-level debug");
     }
 
     ~MdcBridge() override
@@ -115,8 +128,34 @@ private:
     // ================================================================ 上行
     void onData(const mdc_serial::msg::MdcData::ConstSharedPtr &m)
     {
+        ++m_framesReceived;
         m_lastDataMs = steadyMs();
-        sendToPeer(buildState(*m));
+
+        const std::string payload = buildState(*m);
+
+        // 第一帧是个关键里程碑：有它说明 ROS 这一跳通了，之后的麻烦都在 UDP 上。
+        if (!m_firstFrameSeen)
+        {
+            m_firstFrameSeen = true;
+            RCLCPP_INFO(get_logger(),
+                        "收到第一帧 %s（模式=%u 状态=%u 手动SOC=%u%% 自动SOC=%u%%，JSON %zu 字节）",
+                        m_topic.c_str(), unsigned(m->charge_mode), unsigned(m->charge_state),
+                        unsigned(m->manual_soc), unsigned(m->auto_soc), payload.size());
+        }
+
+        RCLCPP_DEBUG(get_logger(),
+                     "转发 seq=%llu 模式=%u 状态=%u | 手动 SOC=%u%% %umV %u×0.1A 温度%u | "
+                     "自动 SOC=%u%% %umV %u×0.1A | hall=%d 连接=%d/%d 充电=%d/%d | JSON %zu 字节",
+                     m_seq, unsigned(m->charge_mode), unsigned(m->charge_state),
+                     unsigned(m->manual_soc), unsigned(m->manual_total_voltage),
+                     unsigned(m->manual_charge_current), unsigned(m->manual_temp),
+                     unsigned(m->auto_soc), unsigned(m->auto_total_voltage),
+                     unsigned(m->auto_charge_current),
+                     int(m->hall_switch), int(m->manual_link_status), int(m->auto_link_status),
+                     int(m->manual_charge_status), int(m->auto_charge_status),
+                     payload.size());
+
+        sendToPeer(payload);
     }
 
     std::string buildState(const mdc_serial::msg::MdcData &m)
@@ -171,6 +210,8 @@ private:
                             mdcproto::kMdcStaleMs);
         }
 
+        RCLCPP_DEBUG(get_logger(), "发送心跳 ros_alive=1 mdc_alive=%d", mdcAlive ? 1 : 0);
+
         sjson::Builder b;
         b.str(mdcproto::kType, mdcproto::kTypeHeartbeat)
             .num(mdcproto::kRosAlive, 1)
@@ -206,13 +247,75 @@ private:
         if (!m_havePeer || m_sock < 0)
             return;
 
-        // UDP 无连接，这里只判断返回值；失败也不要刷屏（界面不在线时会一直失败）
-        ::sendto(m_sock, payload.data(), payload.size(), 0,
-                 reinterpret_cast<const sockaddr *>(&m_peer), sizeof(m_peer));
+        const ssize_t n = ::sendto(m_sock, payload.data(), payload.size(), 0,
+                                   reinterpret_cast<const sockaddr *>(&m_peer),
+                                   sizeof(m_peer));
+        if (n < 0)
+        {
+            // 界面没起来 / 网络不通时会一直失败，不能每帧刷屏：
+            // 错误码换了才提醒，或者累计到 100 次的整数倍再提醒一次
+            const int err = errno;
+            ++m_sendErrors;
+            if (err != m_lastSendErrno || m_sendErrors % 100 == 0)
+                RCLCPP_WARN(get_logger(),
+                            "发送 UDP 到 %s:%u 失败（累计 %llu 次）: %s",
+                            m_peerHost.c_str(), unsigned(ntohs(m_peer.sin_port)),
+                            m_sendErrors, std::strerror(err));
+            m_lastSendErrno = err;
+            return;
+        }
+
+        if (m_lastSendErrno != 0)
+        {
+            RCLCPP_INFO(get_logger(), "UDP 发送恢复正常（此前失败 %llu 次）", m_sendErrors);
+            m_lastSendErrno = 0;
+        }
+        m_bytesSent += static_cast<unsigned long long>(n);
+    }
+
+    // ================================================================ 体检
+    void onDebugTick()
+    {
+        const size_t pubCount = m_sub ? m_sub->get_publisher_count() : 0;
+
+        if (pubCount != m_lastPubCount)
+        {
+            m_lastPubCount = pubCount;
+            if (pubCount > 0)
+            {
+                RCLCPP_INFO(get_logger(), "%s 的发布者数量变为 %zu 个",
+                            m_topic.c_str(), pubCount);
+                m_warnedNoPublisher = false;
+                m_noPubSinceMs = 0;
+            }
+        }
+
+        // "有话题、但没有任何发布者" 是最容易误判的一种没数据：
+        // 域不同 / 话题名不同 / 类型不同都会表现成 pubCount == 0，且不报错。
+        if (pubCount == 0)
+        {
+            if (m_noPubSinceMs == 0)
+                m_noPubSinceMs = steadyMs();
+            else if (!m_warnedNoPublisher && steadyMs() - m_noPubSinceMs >= 10000)
+            {
+                m_warnedNoPublisher = true;
+                RCLCPP_WARN(get_logger(),
+                            "10 秒内没有任何发布者匹配 %s。请确认：ROS_DOMAIN_ID（真机 122）、"
+                            "话题名、以及 mdc_node 是否在运行",
+                            m_topic.c_str());
+            }
+        }
+
+        RCLCPP_DEBUG(get_logger(),
+                     "统计：发布者 %zu 个，已收 %llu 帧，已发 %llu 字节，发送失败 %llu 次，"
+                     "最近一帧距今 %lld ms",
+                     pubCount, m_framesReceived, m_bytesSent, m_sendErrors,
+                     static_cast<long long>(steadyMs() - m_lastDataMs));
     }
 
     // ================================================================ 成员
     std::string m_peerHost;
+    std::string m_topic;
 
     int m_sock = -1;
     sockaddr_in m_peer{};
@@ -222,8 +325,19 @@ private:
     int64_t m_lastDataMs = -100000;
     bool m_lastAlive = false;
 
+    // ---- 调试统计 ----
+    unsigned long long m_framesReceived = 0;
+    unsigned long long m_bytesSent = 0;
+    unsigned long long m_sendErrors = 0;
+    int m_lastSendErrno = 0;
+    bool m_firstFrameSeen = false;
+    size_t m_lastPubCount = 0;
+    bool m_warnedNoPublisher = false;
+    int64_t m_noPubSinceMs = 0;
+
     rclcpp::Subscription<mdc_serial::msg::MdcData>::SharedPtr m_sub;
     rclcpp::TimerBase::SharedPtr m_hbTimer;
+    rclcpp::TimerBase::SharedPtr m_dbgTimer;
 };
 
 int main(int argc, char **argv)
