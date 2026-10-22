@@ -43,3 +43,12 @@ export LD_LIBRARY_PATH="${PKG_ROOT}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-122}"
 export ROS_DOMAIN_ID
 echo "ROS_DOMAIN_ID = ${ROS_DOMAIN_ID}（默认 122，可用环境变量覆盖）"
+
+# ---------------------------------------------------------------- 日志目录
+# rclcpp 默认写 $HOME/.ros/log，一体屏上程序往往由开机脚本 / systemd 拉起，
+# $HOME 是多少不好说，现场翻日志得先猜路径。统一收到包目录下的 log/。
+# （直接跑 bin/mdc_bridge 而没经过脚本时，程序自己会把目录指到
+#   "可执行文件所在目录/log"，见 src/run_log_dir.h）
+ROS_LOG_DIR="${ROS_LOG_DIR:-${PKG_ROOT}/log}"
+export ROS_LOG_DIR
+echo "日志目录   = ${ROS_LOG_DIR}"

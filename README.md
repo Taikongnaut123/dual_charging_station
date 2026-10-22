@@ -335,15 +335,52 @@ diff -u /tmp/official.txt /tmp/ours.txt
 ./run_bridge.sh --ros-args -p peer_host:=192.168.1.50 -p peer_port:=8891
 ```
 
+### 8.4 日志输出位置
 
-### 8.4 QoS
+`rclcpp` 默认把日志写 `$HOME/.ros/log/<节点名>_<pid>_<时间戳>.log`。一体屏上程序
+通常由开机脚本或 systemd 拉起，`$HOME` 可能是 `/root`、也可能根本不一样，现场
+翻日志得先猜路径。所以改成了**跟着程序走**：
+
+| 怎么启动 | 日志位置 |
+|---|---|
+| `./run_bridge.sh`（产物） | `<包目录>/log/` |
+| 直接跑 `bin/mdc_bridge` | `<包目录>/bin/log/`（可执行文件旁边） |
+| 开发环境直接跑 | `ros2_ws/install/mdc_bridge/lib/mdc_bridge/log/` |
+
+实现上有两处，都不改 rclcpp 本身：
+
+- `src/run_log_dir.h`：在 `rclcpp::init()` **之前**把 `ROS_LOG_DIR` 默认指到
+  "可执行文件所在目录/log"。必须早于 init ——日志目录是 init 时定下来的。
+  外部已经设了 `ROS_LOG_DIR` 就完全不动；目录建不出来或不可写（比如装在只读的
+  `/opt` 下）就自动退回 `$HOME/.ros/log`，不会因为日志让程序起不来。
+- `run_bridge.sh` / `run_demo.sh`（共用 `_ros_env.sh`）：把 `ROS_LOG_DIR` 设成
+  包目录下的 `log/`，比 `bin/log` 更好找。
+
+启动日志会打印实际生效的目录，排障第一眼就能确认：
+
+```
+[mdc_bridge]:   ROS_DOMAIN_ID : 122
+[mdc_bridge]:   日志目录      : /opt/mdc/log
+```
+
+换个位置：
+
+```bash
+ROS_LOG_DIR=/var/log/mdc ./run_bridge.sh
+```
+
+> 桥正常运行时日志**基本不增长**（只在启动和链路状态变化时写，一次运行几百字节），
+> 但**每启动一次建一个新文件，不会自动清理**。调试阶段频繁重启的话，隔一阵清一下
+> `log/` 目录就行。
+
+### 8.5 QoS
 
 桥和假设备都用 `SensorDataQoS()`（BEST_EFFORT）。在 DDS 里 **BEST_EFFORT 订阅者
 与 RELIABLE / BEST_EFFORT 两种发布者都兼容**；而 RELIABLE 订阅者遇到 BEST_EFFORT
 发布者会连不上，且没有明显报错（现象是"一帧都没有"）。设备遥测丢一两帧无所谓，
 兼容性更要紧，所以选了 BEST_EFFORT。
 
-### 8.5 排查顺序
+### 8.6 排查顺序
 
 按数据流逐跳验证，别跳步：
 
@@ -355,7 +392,7 @@ diff -u /tmp/official.txt /tmp/ours.txt
 ⑤ 界面 [统计] 帧在涨 --verbose       UDP 这一跳通了吗
 ```
 
-### 8.6 本地复刻的接口包
+### 8.7 本地复刻的接口包
 
 `ros2_ws/src/mdc_serial` 是依据 `doc/` **复刻**的。机器人上如果装了官方包，
 **以官方为准**：用官方包重新 `colcon build` 桥即可。两边 msg 必须完全一致，

@@ -20,6 +20,7 @@
 #include <mdc_serial/msg/mdc_data.hpp>
 
 #include "mdc_protocol.h"
+#include "run_log_dir.h"
 #include "simple_json.h"
 
 #include <arpa/inet.h>
@@ -97,6 +98,11 @@ public:
                         : "0（未设置。真机是 122，对不上就一帧都收不到）");
         RCLCPP_INFO(get_logger(), "  RMW           : %s",
                     (rmw && *rmw) ? rmw : "默认（rmw_fastrtps_cpp）");
+
+        // 日志落到哪里直接说出来，现场不用猜 $HOME 是什么
+        const char *logDir = std::getenv("ROS_LOG_DIR");
+        RCLCPP_INFO(get_logger(), "  日志目录      : %s",
+                    (logDir && *logDir) ? logDir : "默认（$HOME/.ros/log）");
     }
 
     ~MdcBridge() override
@@ -222,6 +228,9 @@ private:
 
 int main(int argc, char **argv)
 {
+    // 必须在 rclcpp::init 之前：日志目录是 init 时定下来的
+    runlog::useRunDirLogs();
+
     rclcpp::init(argc, argv);
 
     // 没有下行链路了，单线程 spin 足够：订阅回调里只做序列化 + 一次 sendto

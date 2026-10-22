@@ -16,6 +16,8 @@
 
 #include <mdc_serial/msg/mdc_data.hpp>
 
+#include "run_log_dir.h"
+
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -209,6 +211,9 @@ private:
 
 int main(int argc, char **argv)
 {
+    // 与桥一致：日志落到程序所在目录的 log/ 下
+    runlog::useRunDirLogs();
+
     rclcpp::init(argc, argv);
     rclcpp::spin(std::make_shared<FakeDevice>());
     rclcpp::shutdown();
