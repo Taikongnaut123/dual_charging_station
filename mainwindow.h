@@ -41,6 +41,16 @@ public:
     /** 无真实桥时用内置仿真数据驱动界面（开发/演示用） */
     void setLoopbackEnabled(bool on);
 
+    /**
+     * 全屏显示。
+     *
+     * 不能直接用 showFullScreen()：Qt 在 X11 下是靠 _NET_WM_STATE_FULLSCREEN
+     * 让窗口管理器帮忙改尺寸的，一体屏上往往直接 xinit 起程序、根本没有 WM，
+     * 于是窗口停在构造时的 1360x800（或缩放后的尺寸），四周留黑边。
+     * 这里等一会儿比对实际几何，没铺满就自己贴到屏幕尺寸上。
+     */
+    void enterFullScreen();
+
     BridgeClient *bridgeClient() const { return m_bridge; }
     StationController *stationController() const { return m_controller; }
 

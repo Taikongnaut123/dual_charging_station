@@ -48,7 +48,11 @@ void StationPage::buildUi()
 Card *StationPage::buildCcuCard()
 {
     auto *card = new Card(QStringLiteral("CCU 电机状态"));
-    card->setBadge(QStringLiteral("ccu_motor_status"), QStringLiteral("info"));
+    card->setHelp(QStringLiteral(
+        "本卡数据来自 ccu_motor_status，取值：\n"
+        "1 初始化中  2 初始化完成  3 回零中\n"
+        "4 回零完成  5 到位中    6 到位完成\n"
+        "0xFE 断联   0xFF 错误"));
 
     m_ccuText = new QLabel;
     m_ccuText->setObjectName(QStringLiteral("bigState"));
@@ -67,7 +71,16 @@ Card *StationPage::buildCcuCard()
 Card *StationPage::buildIoCard()
 {
     auto *card = new Card(QStringLiteral("连接与充电状态"));
-    card->setBadge(QStringLiteral("link / charge / hall / fan"), QStringLiteral("info"));
+    card->setHelp(QStringLiteral(
+        "本卡 6 个指示灯的来源字段：\n"
+        "· 手动线连接 —— manual_link_status\n"
+        "· 手动充电   —— manual_charge_status\n"
+        "· 自动连接   —— auto_link_status\n"
+        "· 自动充电   —— auto_charge_status\n"
+        "· 霍尔开关   —— hall_switch（机器人坐到位）\n"
+        "· 风扇       —— fan_status\n\n"
+        "自动充电需要「坐到位 + 充电口贴合」两个条件，也就是 hall_switch\n"
+        "和 auto_link_status 同时为 1；手动充电只看 manual_link_status。"));
 
     auto *row = new QHBoxLayout;
     row->setSpacing(Theme::px(10));
@@ -96,7 +109,11 @@ Card *StationPage::buildIoCard()
 Card *StationPage::buildRawCard()
 {
     auto *card = new Card(QStringLiteral("原始字段一览"));
-    card->setBadge(QStringLiteral("对照 ros2 topic echo 排障"), QStringLiteral("info"));
+    card->setHelp(QStringLiteral(
+        "这里把收到的数值原样列出，不做任何换算或判断——\n"
+        "屏幕上哪一项看着不对，就拿它对数据源：\n"
+        "ros2 topic echo /mdc_data。\n\n"
+        "两边对不上就是界面问题，两边一样就是设备上报的值就这么大。"));
 
     m_rawMode = plainValue();
     m_rawState = plainValue();

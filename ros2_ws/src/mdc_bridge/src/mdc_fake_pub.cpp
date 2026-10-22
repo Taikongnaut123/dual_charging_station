@@ -172,11 +172,24 @@ private:
         bool autoLink = (autoCharging || autoFull);
         switch (m_linkOverride)
         {
-        case 0: manLink = false; autoLink = false; break;
-        case 1: manLink = true;  autoLink = false; break;
-        case 2: manLink = false; autoLink = true;  break;
-        case 3: manLink = true;  autoLink = true;  break;
-        default: break;
+        case 0:
+            manLink = false;
+            autoLink = false;
+            break;
+        case 1:
+            manLink = true;
+            autoLink = false;
+            break;
+        case 2:
+            manLink = false;
+            autoLink = true;
+            break;
+        case 3:
+            manLink = true;
+            autoLink = true;
+            break;
+        default:
+            break;
         }
 
         m.manual_link_status = manLink ? 1 : 0;

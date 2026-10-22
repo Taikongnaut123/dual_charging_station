@@ -117,7 +117,12 @@ Card *OverviewPage::buildPortCard(bool manual)
 Card *OverviewPage::buildSummaryCard()
 {
     auto *card = new Card(QStringLiteral("整桩概况"));
-    card->setBadge(QStringLiteral("charge_state / charge_mode"), QStringLiteral("info"));
+    card->setHelp(QStringLiteral(
+        "本卡数据来自两个字段：\n"
+        "· 充电状态 —— charge_state（0 故障 / 1 空闲 / 2 充电中 / 3 充满）\n"
+        "· 充电模式 —— charge_mode（0 待机 / 1 手动 / 2 自动）\n\n"
+        "下面的「本次充电量」「已充时长」「预计剩余」「累计次数 / 电量」"
+        "协议里没有，是本程序在本地统计和估算的。"));
 
     m_stateText = new QLabel;
     m_stateText->setObjectName(QStringLiteral("bigState"));

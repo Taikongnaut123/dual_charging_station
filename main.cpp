@@ -215,7 +215,7 @@ int main(int argc, char *argv[])
     }
 
     if (parser.isSet(fullscreenOption))
-        window.showFullScreen();
+        window.enterFullScreen();
     else
         window.show();
 

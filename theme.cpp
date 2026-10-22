@@ -86,6 +86,33 @@ QLabel#badge[level="warn"] { color: @AMBER@;  border-color: rgba(245,165,36,90);
 QLabel#badge[level="err"]  { color: @RED@;    border-color: rgba(240,75,75,90);   background: rgba(240,75,75,26); }
 QLabel#badge[level="info"] { color: @ACCENT@; border-color: rgba(34,211,238,90);  background: rgba(34,211,238,26); }
 
+/* 标题旁的 "?" 提示：平时很淡，悬停才高亮，不抢操作员的注意力 */
+QLabel#helpMark {
+    color: @TEXT3@;
+    background: @PANEL@;
+    border: 1px solid @CARD_BORDER@;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    min-width: 16px;
+    max-width: 16px;
+    min-height: 16px;
+    max-height: 16px;
+}
+QLabel#helpMark:hover {
+    color: @ACCENT@;
+    border-color: @ACCENT@;
+}
+
+/* 悬停说明本身也是界面的一部分，默认白底黑字的 tooltip 在暗色界面上非常突兀 */
+QToolTip {
+    color: @TEXT@;
+    background: @CARD@;
+    border: 1px solid @CARD_BORDER@;
+    padding: 6px 9px;
+    font-size: 12px;
+}
+
 /* ---------------- 未启用的充电口（link_status = 0） ----------------
  * 整卡降级：底色压暗 + 虚线边框，一眼就能看出"这个口没启用"。
  * 自绘的环形表不吃 QSS，那边由 CircularGauge::setDimmed() 单独处理。

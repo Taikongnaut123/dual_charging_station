@@ -45,10 +45,10 @@ private:
     /** 一个充电口的控件集合 */
     struct PortWidgets
     {
-        Card *card = nullptr;       // 整卡，置灰靠它的动态属性 link=on/off
+        Card *card = nullptr; // 整卡，置灰靠它的动态属性 link=on/off
         CircularGauge *gauge = nullptr;
         QLabel *badge = nullptr;
-        QLabel *hint = nullptr;     // 未启用提示，仅 link_status=0 时显示
+        QLabel *hint = nullptr; // 未启用提示，仅 link_status=0 时显示
         QLabel *voltage = nullptr;
         QLabel *chargeCurrent = nullptr;
         QLabel *dischargeCurrent = nullptr;

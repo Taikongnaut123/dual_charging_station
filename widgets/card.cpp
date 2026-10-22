@@ -42,9 +42,23 @@ void Card::addLayout(QLayout *layout, int stretch)
     m_content->addLayout(layout, stretch);
 }
 
-QLabel *Card::setBadge(const QString &text, const QString &level)
+QLabel *Card::setHelp(const QString &tooltipText)
 {
-    if (!m_badge)
+    if (!m_help)
+    {
+        m_help = new QLabel(QStringLiteral("?"), this);
+        m_help->setObjectName(QStringLiteral("helpMark"));
+        m_help->setAlignment(Qt::AlignCenter);
+        m_help->setCursor(Qt::WhatsThisCursor);
+        // m_header 的第 0 项是标题、第 1 项是弹簧，问号插在标题后面
+        m_header->insertWidget(1, m_help, 0, Qt::AlignVCenter);
+    }
+    m_help->setToolTip(tooltipText);
+    return m_help;
+}
+
+QLabel *Card::setBadge(const QString &text, const QString &level)
+{    if (!m_badge)
     {
         m_badge = new QLabel(this);
         m_badge->setObjectName(QStringLiteral("badge"));
