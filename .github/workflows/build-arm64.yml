@@ -70,10 +70,26 @@ jobs:
           echo "提交      : $GITHUB_SHA"
           echo "触发方式  : $GITHUB_EVENT_NAME"
 
+      - name: 恢复 apt 下载缓存
+        uses: actions/cache@v4
+        with:
+          # 托管 runner 每次都是全新虚拟机，装好的包留不下来；
+          # 能缓存的是**下载下来的 .deb**，省掉重复下载（解包安装仍然要做）。
+          # key 里带上 workflow 文件的 hash：改包列表就自动失效，不会用到旧包。
+          path: ~/apt-debs
+          key: apt-debs-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/workflows/build-arm64.yml') }}
+          restore-keys: |
+            apt-debs-${{ runner.os }}-${{ runner.arch }}-
+
       - name: 安装 Qt5 与图形依赖
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          set -euo pipefail
+          # apt 的默认下载目录 /var/cache/apt/archives 属 root，actions/cache
+          # 存不进去；用 -o Dir::Cache::archives 指到用户目录下，缓存才能生效。
+          APT_CACHE="$HOME/apt-debs"
+          mkdir -p "$APT_CACHE/partial"
+          sudo apt-get -o Dir::Cache::archives="$APT_CACHE" update
+          sudo apt-get -o Dir::Cache::archives="$APT_CACHE" install -y --no-install-recommends \
             build-essential \
             qtbase5-dev \
             qtbase5-dev-tools \
@@ -88,15 +104,23 @@ jobs:
 
       - name: 配置 ROS2 Humble 软件源
         run: |
-          curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /tmp/ros.key
+          set -euo pipefail
+          APT_CACHE="$HOME/apt-debs"
+          # 公钥取不下来时重试几次，别让整条 CI 挂在一个网络抖动上
+          curl -sSL --retry 3 --retry-delay 2 \
+            https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
+            -o /tmp/ros.key
           sudo mv /tmp/ros.key /usr/share/keyrings/ros-archive-keyring.gpg
           echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" \
             | sudo tee /etc/apt/sources.list.d/ros2.list >/dev/null
-          sudo apt-get update
+          sudo apt-get -o Dir::Cache::archives="$APT_CACHE" update
 
       - name: 安装 ROS2 依赖
         run: |
-          sudo apt-get install -y --no-install-recommends \
+          set -euo pipefail
+          APT_CACHE="$HOME/apt-debs"
+          mkdir -p "$APT_CACHE/partial"
+          sudo apt-get -o Dir::Cache::archives="$APT_CACHE" install -y --no-install-recommends \
             ros-${ROS_DISTRO}-ros-base \
             ros-${ROS_DISTRO}-ament-cmake \
             ros-${ROS_DISTRO}-rosidl-default-generators \
