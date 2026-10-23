@@ -736,3 +736,29 @@ journalctl -u dual-charging-station -f       # 实时日志
 ```
 
 改了一边不改另一边，现象是**界面永远 0 帧**（数据发到 8891 去了，没人接）。
+
+### 启动报 `无法绑定 UDP 8891`
+
+```
+[链路] 无法绑定 UDP 8891 —— 通常说明已经有一个界面实例在运行。
+```
+
+UDP 8891 同一时刻只能被一个进程绑定。**这几乎总是"重复启动"**：上一个界
+面进程没退干净，你又起了一个。
+
+```bash
+pgrep -af bin/dual_charging_station     # 看有几个
+pkill -f bin/dual_charging_station      # 全关掉
+./run_ui.sh -f                          # 再起一个
+```
+
+程序在这里**直接以退出码 2 退出**，不会"凑合着用"。早先的版本会默默退回环
+回（内置仿真）模式，界面照样动、数字照样跳，但全是假的——现场很容易把仿真
+数据当成设备读数，越查越偏。真要看仿真数据请显式加 `--loopback`。
+
+用 systemd 服务（`install_service.sh`）就不会碰到这个问题：服务天然单实例，
+而且 unit 里配了 `RestartPreventExitStatus=2`，端口冲突时不会每 3 秒重拉一
+次把真正的报错冲掉。
+
+> `pgrep -f dual_charging_station` 会把 `mdc_bridge` 也列出来，因为它的路径里
+> 含 `dual_charging_station-linux-arm64`。用 `bin/dual_charging_station` 更准。

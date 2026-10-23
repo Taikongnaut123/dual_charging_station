@@ -360,9 +360,21 @@ int main(int argc, char *argv[])
         const quint16 statPort = parser.value(statPortOption).toUShort();
         if (!window.startBridge(statPort))
         {
-            // 端口被占用等情况：退回环回模式，至少让界面可用
-            qWarning("无法绑定 UDP %u，已退回环回仿真模式", unsigned(statPort));
-            window.setLoopbackEnabled(true);
+            // 端口绑不上，最常见的原因就是“已经有一个界面实例在跑”。
+            //
+            // 以前这里会默默退回环回模式，看着“至少界面能用”，实际是在拿
+            // 内部模拟数据冒充设备数据——现场排障时这比直接起不来更坑：界面
+            // 一切正常，就是数字对不上。设备上宁可失败得大声一点。
+            // 真要看仿真数据，请显式加 --loopback。
+            std::fprintf(stderr,
+                         "[链路] 无法绑定 UDP %u —— 通常说明已经有一个界面实例在运行。\n"
+                         "       同一个屏幕上只应有一个实例，先确认并关掉旧的：\n"
+                         "           pgrep -af bin/dual_charging_station\n"
+                         "           pkill -f bin/dual_charging_station\n"
+                         "       如果只是想看仿真数据，请显式加 --loopback。\n",
+                         unsigned(statPort));
+            std::fflush(stderr);
+            return 2;
         }
     }
     else

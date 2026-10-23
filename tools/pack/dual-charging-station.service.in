@@ -11,6 +11,9 @@ WorkingDirectory=@PKG_ROOT@
 ExecStart=@EXEC_LINE@
 Restart=always
 RestartSec=3
+# 端口被占用（= 已有另一个实例在跑）时程序以 2 退出，这种情况不要自动
+# 重拉，否则每 3 秒刷一条 journal 日志，把真正的报错冲掉。
+RestartPreventExitStatus=2
 
 # framebuffer 上没有鼠标，别把箭头画到屏上。
 # 如果你的板子有 X 并且想走 X，保持 QT_QPA_PLATFORM 不设即可——
