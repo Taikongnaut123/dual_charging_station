@@ -28,22 +28,30 @@ endif()
 message(STATUS "共用协议头文件目录: ${MDC_SHARED_DIR}")
 
 # ---------------------------------------------------------------------------
-# mdc_bridge：桥节点
+# 可执行文件名统一加 chric_software_ 前缀。
+#
+# 注意：ROS **包名**（project(mdc_bridge)）和 **节点名**（rclcpp::Node("mdc_bridge")）
+# 都不动，只改落地的可执行文件名。这样 ps / top / pgrep 里能一眼认出本项目的
+# 进程，而 ros2 run mdc_bridge ... / 话题路径 / 其它仓库的依赖都不受影响。
 # ---------------------------------------------------------------------------
-add_executable(mdc_bridge src/mdc_bridge_node.cpp)
-target_include_directories(mdc_bridge PRIVATE ${MDC_SHARED_DIR})
-ament_target_dependencies(mdc_bridge rclcpp mdc_serial std_msgs)
 
 # ---------------------------------------------------------------------------
-# mdc_fake_pub：假设备（无真机时验证用）
+# chric_software_mdc_bridge：桥节点
 # ---------------------------------------------------------------------------
-add_executable(mdc_fake_pub src/mdc_fake_pub.cpp)
-target_include_directories(mdc_fake_pub PRIVATE ${MDC_SHARED_DIR})
-ament_target_dependencies(mdc_fake_pub rclcpp mdc_serial std_msgs)
+add_executable(chric_software_mdc_bridge src/mdc_bridge_node.cpp)
+target_include_directories(chric_software_mdc_bridge PRIVATE ${MDC_SHARED_DIR})
+ament_target_dependencies(chric_software_mdc_bridge rclcpp mdc_serial std_msgs)
+
+# ---------------------------------------------------------------------------
+# chric_software_mdc_fake_pub：假设备（无真机时验证用）
+# ---------------------------------------------------------------------------
+add_executable(chric_software_mdc_fake_pub src/mdc_fake_pub.cpp)
+target_include_directories(chric_software_mdc_fake_pub PRIVATE ${MDC_SHARED_DIR})
+ament_target_dependencies(chric_software_mdc_fake_pub rclcpp mdc_serial std_msgs)
 
 install(TARGETS
-  mdc_bridge
-  mdc_fake_pub
+  chric_software_mdc_bridge
+  chric_software_mdc_fake_pub
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -54,7 +62,7 @@ install(TARGETS
 # 所以用 $ORIGIN（运行时二进制自身所在目录）定位即可：$ORIGIN/../lib。
 # 整个包目录拷到哪、挪到哪都能直接跑，不需要重新配置。
 #
-# 不设这个的话，用户直接敲 ./bin/mdc_bridge 会报：
+# 不设这个的话，用户直接敲 ./bin/chric_software_mdc_bridge 会报：
 #     libmdc_serial__rosidl_typesupport_cpp.so: cannot open shared object file
 # （未打包时由 colcon overlay 的 LD_LIBRARY_PATH 兜住，所以在开发机上察觉不到）
 #
@@ -65,7 +73,7 @@ install(TARGETS
 #     Could not load library libmdc_serial__rosidl_typesupport_fastrtps_cpp.so
 # 换成传统的 DT_RPATH，它会被继承、且对 dlopen 生效，才能真正自包含。
 # ---------------------------------------------------------------------------
-set_target_properties(mdc_bridge mdc_fake_pub PROPERTIES
+set_target_properties(chric_software_mdc_bridge chric_software_mdc_fake_pub PROPERTIES
   INSTALL_RPATH "$ORIGIN/../lib"
   BUILD_WITH_INSTALL_RPATH TRUE
   LINK_FLAGS "-Wl,--disable-new-dtags"

@@ -15,6 +15,7 @@
 #include <QResizeEvent>
 #include <QScreen>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QShortcut>
 #include <QTabBar>
 #include <QTabWidget>
@@ -170,7 +171,9 @@ QWidget *MainWindow::wrapInScrollArea(QWidget *page)
 {
     auto *container = new QWidget;
     auto *lay = new QVBoxLayout(container);
-    lay->setContentsMargins(Theme::px(14), Theme::px(14), Theme::px(14), Theme::px(14));
+    // 上下边距压得很小：页面里已经有卡片自己的内边距了，这里再给
+    // 14px 只是白占一整屏高度，而 1024×768 上纵向特别挤。
+    lay->setContentsMargins(Theme::px(12), Theme::px(8), Theme::px(12), Theme::px(8));
     lay->addWidget(page);
 
     auto *scroll = new QScrollArea;

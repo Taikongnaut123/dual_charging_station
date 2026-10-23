@@ -102,8 +102,7 @@ namespace
             QFile enabled(QStringLiteral("/sys/class/drm/%1/enabled").arg(e));
             if (!status.open(QIODevice::ReadOnly) || !enabled.open(QIODevice::ReadOnly))
                 continue;
-            if (status.readAll().trimmed() == QByteArrayLiteral("connected")
-                && enabled.readAll().trimmed() == QByteArrayLiteral("enabled"))
+            if (status.readAll().trimmed() == QByteArrayLiteral("connected") && enabled.readAll().trimmed() == QByteArrayLiteral("enabled"))
                 ++n;
         }
         return n;
@@ -148,13 +147,10 @@ namespace
         if (fd < 0)
             return;
 
-        fb_var_screeninfo var {};
-        fb_fix_screeninfo fix {};
-        const bool queried = ::ioctl(fd, FBIOGET_VSCREENINFO, &var) == 0
-                             && ::ioctl(fd, FBIOGET_FSCREENINFO, &fix) == 0;
-        if (queried && var.bits_per_pixel > 0 && fix.line_length > 0
-            && var.xres_virtual > var.xres
-            && fix.line_length * 8u / var.bits_per_pixel == var.xres_virtual)
+        fb_var_screeninfo var{};
+        fb_fix_screeninfo fix{};
+        const bool queried = ::ioctl(fd, FBIOGET_VSCREENINFO, &var) == 0 && ::ioctl(fd, FBIOGET_FSCREENINFO, &fix) == 0;
+        if (queried && var.bits_per_pixel > 0 && fix.line_length > 0 && var.xres_virtual > var.xres && fix.line_length * 8u / var.bits_per_pixel == var.xres_virtual)
         {
             const unsigned reported = var.xres;
             fb_var_screeninfo want = var;
@@ -344,6 +340,12 @@ int main(int argc, char *argv[])
         else
             qWarning("--text-scale 参数无效，用默认值");
     }
+    // 屏幕已经和设计稿一样大（或更大，geoScale 会被夹在 1.0）时不要再放大
+    // 字号。textBoost 的本意是补偿"整幅内容等比缩小后字太小"，没有缩小就
+    // 没有要补偿的；这时再乘 1.15，行高、标签高度全都涨 15%，就会出现
+    // "按自己的设计尺寸 1360×800 都装不下、还要滚动"的怪现象。
+    if (geoScale >= 0.999 && !parser.isSet(textScaleOption))
+        textBoost = 1.0;
     Theme::setTextBoost(textBoost);
 
     // 中文界面下默认字号略小一号，具体尺寸由样式表控制
@@ -369,8 +371,8 @@ int main(int argc, char *argv[])
             std::fprintf(stderr,
                          "[链路] 无法绑定 UDP %u —— 通常说明已经有一个界面实例在运行。\n"
                          "       同一个屏幕上只应有一个实例，先确认并关掉旧的：\n"
-                         "           pgrep -af bin/dual_charging_station\n"
-                         "           pkill -f bin/dual_charging_station\n"
+                         "           pgrep -af chric_software_dual_charging_station\n"
+                         "           pkill -f chric_software_dual_charging_station\n"
                          "       如果只是想看仿真数据，请显式加 --loopback。\n",
                          unsigned(statPort));
             std::fflush(stderr);

@@ -16,4 +16,4 @@ PKG_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=_ros_env.sh
 source "${PKG_ROOT}/_ros_env.sh"
 
-exec "${PKG_ROOT}/bin/mdc_bridge" "$@"
+exec "${PKG_ROOT}/bin/chric_software_mdc_bridge" "$@"

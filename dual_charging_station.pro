@@ -5,7 +5,9 @@ greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 CONFIG += c++11
 
 TEMPLATE = app
-TARGET   = dual_charging_station
+# 可执行文件名带 chric_software_ 前缀。板子上同时跑着 ROS 节点、桥、界面，
+# ps / top / pgrep 里看到的名字要能一眼区分出哪些是本项目的进程。
+TARGET   = chric_software_dual_charging_station
 
 # shared/mdc_protocol.h 是界面与 mdc_bridge 之间 UDP JSON 协议的唯一契约，
 # 两个构建系统（qmake 与 colcon）都引用同一份头文件，避免手抄键名对不上。

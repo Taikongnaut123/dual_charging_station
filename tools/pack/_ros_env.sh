@@ -17,7 +17,7 @@ if [[ ! -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]]; then
     {
         echo "找不到 /opt/ros/${ROS_DISTRO}/setup.bash"
         echo
-        echo "mdc_bridge / mdc_fake_pub 是 ROS2 节点，目标机必须装上 ROS2 ${ROS_DISTRO}。"
+        echo "chric_software_mdc_bridge / chric_software_mdc_fake_pub 是 ROS2 节点，目标机必须装上 ROS2 ${ROS_DISTRO}。"
         echo "    sudo apt install ros-${ROS_DISTRO}-ros-base"
         echo
         echo "如果只想跑显示屏界面，请用 run_ui.sh —— 它不依赖 ROS2。"
@@ -47,7 +47,7 @@ echo "ROS_DOMAIN_ID = ${ROS_DOMAIN_ID}（默认 122，可用环境变量覆盖�
 # ---------------------------------------------------------------- 日志目录
 # rclcpp 默认写 $HOME/.ros/log，一体屏上程序往往由开机脚本 / systemd 拉起，
 # $HOME 是多少不好说，现场翻日志得先猜路径。统一收到包目录下的 log/。
-# （直接跑 bin/mdc_bridge 而没经过脚本时，程序自己会把目录指到
+# （直接跑 bin/chric_software_mdc_bridge 而没经过脚本时，程序自己会把目录指到
 #   "可执行文件所在目录/log"，见 src/run_log_dir.h）
 ROS_LOG_DIR="${ROS_LOG_DIR:-${PKG_ROOT}/log}"
 export ROS_LOG_DIR

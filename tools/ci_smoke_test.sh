@@ -46,9 +46,9 @@ LOG_DIR="${LOG_DIR:-$ROOT/build/ci-logs}"
 
 # 三个可执行文件的路径都可用环境变量覆盖：
 # CI 里会指向解包后的产物目录，以此验证产物能脱离本工程的构建树独立运行。
-APP="${APP_BIN:-$ROOT/build/dual_charging_station}"
-BRIDGE="${BRIDGE_BIN:-$WS/install/mdc_bridge/lib/mdc_bridge/mdc_bridge}"
-FAKE="${FAKE_BIN:-$WS/install/mdc_bridge/lib/mdc_bridge/mdc_fake_pub}"
+APP="${APP_BIN:-$ROOT/build/chric_software_dual_charging_station}"
+BRIDGE="${BRIDGE_BIN:-$WS/install/mdc_bridge/lib/mdc_bridge/chric_software_mdc_bridge}"
+FAKE="${FAKE_BIN:-$WS/install/mdc_bridge/lib/mdc_bridge/chric_software_mdc_fake_pub}"
 # 注意用 ${VAR-默认} 而不是 ${VAR:-默认}：显式传空字符串表示"不要 source overlay"
 OVERLAY_SETUP="${OVERLAY_SETUP-$WS/install/setup.bash}"
 

@@ -48,7 +48,7 @@ void OverviewPage::buildUi()
 {
     auto *grid = new QGridLayout(this);
     grid->setContentsMargins(0, 0, 0, 0);
-    grid->setSpacing(Theme::px(7));
+    grid->setSpacing(Theme::px(6));
 
     grid->addWidget(buildPortCard(true), 0, 0);
     grid->addWidget(buildPortCard(false), 0, 1);
@@ -57,7 +57,9 @@ void OverviewPage::buildUi()
 
     grid->setColumnStretch(0, 1);
     grid->setColumnStretch(1, 1);
-    grid->setRowStretch(3, 1);
+    // 多出来的纵向空间全部给曲线图（卡片高度已经足够时它就变高），
+    // 而不是留给一个不存在的第 4 行。
+    grid->setRowStretch(2, 1);
 }
 
 Card *OverviewPage::buildPortCard(bool manual)
@@ -75,14 +77,17 @@ Card *OverviewPage::buildPortCard(bool manual)
     row->setSpacing(Theme::px(18));
 
     w.gauge = new CircularGauge;
-    w.gauge->setFixedSize(Theme::px(150), Theme::px(150));
+    // 大小受骰子列高度约束：六行指标本来就比表高，表再放大只是白占宽度。
+    w.gauge->setFixedSize(Theme::px(118), Theme::px(118));
     w.gauge->setCaption(QStringLiteral("SOC"));
     w.gauge->setUnit(QStringLiteral("%"));
     w.gauge->setAccent(manual ? Theme::Accent : Theme::Violet);
     row->addWidget(w.gauge);
 
-    auto *kv = new QVBoxLayout;
-    kv->setSpacing(Theme::px(9));
+    auto *kv = new QGridLayout;
+    kv->setContentsMargins(0, 0, 0, 0);
+    kv->setHorizontalSpacing(Theme::px(16));
+    kv->setVerticalSpacing(Theme::px(5));
 
     w.voltage = plainValue();
     w.chargeCurrent = plainValue();
@@ -91,13 +96,19 @@ Card *OverviewPage::buildPortCard(bool manual)
     w.batteryId = plainValue();
     w.chgSwitch = plainValue();
 
-    kv->addWidget(kvRow(QStringLiteral("总电压"), w.voltage));
-    kv->addWidget(kvRow(QStringLiteral("充电电流"), w.chargeCurrent));
-    kv->addWidget(kvRow(QStringLiteral("放电电流"), w.dischargeCurrent));
-    kv->addWidget(kvRow(QStringLiteral("电池温度"), w.temp));
-    kv->addWidget(kvRow(QStringLiteral("电池 ID"), w.batteryId));
-    kv->addWidget(kvRow(QStringLiteral("充电开关"), w.chgSwitch));
-    kv->addStretch(1);
+    // 六项指标排成 2 列 × 3 行，而不是一列 6 行。
+    //
+    // 一列 6 行时这张卡是整页最高的一块：仪表盘只有 ~90px 高，旁边的指标列
+    // 却要 ~170px，1024×768 上「整桩概况」和「充电电流曲线」直接被挤到屏幕
+    // 外面，看个曲线还得下拉。排成两列后卡片高度降到跟仪表盘一个量级。
+    kv->addWidget(kvRow(QStringLiteral("总电压"), w.voltage), 0, 0);
+    kv->addWidget(kvRow(QStringLiteral("充电电流"), w.chargeCurrent), 1, 0);
+    kv->addWidget(kvRow(QStringLiteral("放电电流"), w.dischargeCurrent), 2, 0);
+    kv->addWidget(kvRow(QStringLiteral("电池温度"), w.temp), 0, 1);
+    kv->addWidget(kvRow(QStringLiteral("电池 ID"), w.batteryId), 1, 1);
+    kv->addWidget(kvRow(QStringLiteral("充电开关"), w.chgSwitch), 2, 1);
+    kv->setColumnStretch(0, 1);
+    kv->setColumnStretch(1, 1);
 
     row->addLayout(kv, 1);
     card->addLayout(row);
@@ -171,10 +182,10 @@ Card *OverviewPage::buildCurveCard()
     card->setBadge(QStringLiteral("最近 90 秒"), QStringLiteral("info"));
 
     m_chart = new ChargeCurveChart;
-    m_chart->setMinimumHeight(Theme::px(110));
     m_chart->setSeries(QStringLiteral("手动口"), QStringLiteral("A"),
                        QStringLiteral("自动口"), QStringLiteral("A"));
     m_chart->setEmptyText(QStringLiteral("等待数据 ..."));
+    m_chart->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     card->addWidget(m_chart, 1);
     return card;
 }

@@ -15,9 +15,14 @@
 set -euo pipefail
 
 PKG_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-UNIT_NAME="dual-charging-station"
+UNIT_NAME="chric-software-dual-charging-station"
 UNIT_PATH="/etc/systemd/system/${UNIT_NAME}.service"
-TEMPLATE="${PKG_ROOT}/dual-charging-station.service.in"
+TEMPLATE="${PKG_ROOT}/${UNIT_NAME}.service.in"
+
+# 改名前的服务名。装新服务时必须把它停掉，否则开机两套一起拉，
+# 界面抢 UDP 8891（后起的会以退出码 2 退出，但日志会很难看）。
+LEGACY_UNIT_NAME="dual-charging-station"
+LEGACY_UNIT_PATH="/etc/systemd/system/${LEGACY_UNIT_NAME}.service"
 
 MODE="all"
 PRINT_ONLY=0
@@ -77,6 +82,13 @@ if [[ "$MODE" == "uninstall" ]]; then
     systemctl stop "$UNIT_NAME" 2>/dev/null || true
     systemctl disable "$UNIT_NAME" 2>/dev/null || true
     rm -f "$UNIT_PATH"
+    # 旧名字的服务一并清掉，避免“卸了好像又没卸”
+    if [[ -f "$LEGACY_UNIT_PATH" ]]; then
+        systemctl stop "$LEGACY_UNIT_NAME" 2>/dev/null || true
+        systemctl disable "$LEGACY_UNIT_NAME" 2>/dev/null || true
+        rm -f "$LEGACY_UNIT_PATH"
+        echo "已连带移除旧服务 ${LEGACY_UNIT_NAME}"
+    fi
     systemctl daemon-reload
     echo "已卸载 ${UNIT_NAME}（程序本身没动，还在 ${PKG_ROOT}）"
     exit 0
@@ -84,8 +96,19 @@ fi
 
 # ---------------------------------------------------------------- 安装
 echo "包目录   : ${PKG_ROOT}"
+echo "服务名   : ${UNIT_NAME}"
 echo "运行方式 : $([[ "$MODE" == ui ]] && echo '只起界面' || { [[ "$MODE" == bridge ]] && echo '只起桥' || echo '界面 + 桥'; })"
 echo
+
+# 改名前的旧服务先停掉，否则两套会抢同一个 UDP 端口
+if [[ -f "$LEGACY_UNIT_PATH" ]]; then
+    echo "发现旧服务 ${LEGACY_UNIT_NAME}，正在停用并移除 ..."
+    systemctl stop "$LEGACY_UNIT_NAME" 2>/dev/null || true
+    systemctl disable "$LEGACY_UNIT_NAME" 2>/dev/null || true
+    rm -f "$LEGACY_UNIT_PATH"
+    systemctl daemon-reload
+    echo
+fi
 
 render_unit > "$UNIT_PATH"
 chmod 644 "$UNIT_PATH"

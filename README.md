@@ -419,7 +419,7 @@ diff -u /tmp/official.txt /tmp/ours.txt
 | 怎么启动 | 日志位置 |
 |---|---|
 | `./run_bridge.sh`（产物） | `<包目录>/log/` |
-| 直接跑 `bin/mdc_bridge` | `<包目录>/bin/log/`（可执行文件旁边） |
+| 直接跑 `bin/chric_software_mdc_bridge` | `<包目录>/bin/log/`（可执行文件旁边） |
 | 开发环境直接跑 | `ros2_ws/install/mdc_bridge/lib/mdc_bridge/log/` |
 
 实现上有两处，都不改 rclcpp 本身：
@@ -641,10 +641,10 @@ generator_c），`ldd` 看不到它们。打包时整套带上（`lib/`），并
 从 Releases 下载对应架构的包（`latest` 标签），解包后：
 
 ```
-bin/dual_charging_station   显示屏界面（不依赖 ROS2）
-bin/mdc_bridge              ROS2 桥
-bin/mdc_fake_pub            假设备
-lib/libmdc_serial__*.so     mdc_serial 接口库，桥运行时 dlopen 它们
+bin/chric_software_dual_charging_station   显示屏界面（不依赖 ROS2）
+bin/chric_software_mdc_bridge              ROS2 桥
+bin/chric_software_mdc_fake_pub            假设备
+lib/libmdc_serial__*.so                    mdc_serial 接口库，桥运行时 dlopen 它们
 run_ui.sh                   起界面
 run_bridge.sh               起桥
 run_fake.sh                 起假设备
@@ -662,8 +662,8 @@ run_demo.sh                 一键起全套
 #### 起不来先看缺什么
 
 ```bash
-ldd ./bin/dual_charging_station | grep "not found"
-ldd ./bin/mdc_bridge            | grep "not found"
+ldd ./bin/chric_software_dual_charging_station | grep "not found"
+ldd ./bin/chric_software_mdc_bridge            | grep "not found"
 ```
 
 **`libgssapi.so.3: cannot open shared object file`** —— 这条不是我们漏打包，
@@ -717,9 +717,9 @@ WantedBy=multi-user.target                  # 走 framebuffer，不需要图形�
 日常操作：
 
 ```bash
-systemctl status   dual-charging-station
-systemctl restart  dual-charging-station     # 换热插/改配置后
-journalctl -u dual-charging-station -f       # 实时日志
+systemctl status   chric-software-dual-charging-station
+systemctl restart  chric-software-dual-charging-station   # 换热插/改配置后
+journalctl -u chric-software-dual-charging-station -f     # 实时日志
 ```
 
 > 为什么用 systemd 而不是 `~/.xinitrc`：面板是**设备**不是桌面，需要"开机就有、
@@ -747,9 +747,9 @@ UDP 8891 同一时刻只能被一个进程绑定。**这几乎总是"重复启�
 面进程没退干净，你又起了一个。
 
 ```bash
-pgrep -af bin/dual_charging_station     # 看有几个
-pkill -f bin/dual_charging_station      # 全关掉
-./run_ui.sh -f                          # 再起一个
+pgrep -af chric_software_dual_charging_station     # 看有几个
+pkill -f chric_software_dual_charging_station      # 全关掉
+./run_ui.sh -f                                     # 再起一个
 ```
 
 程序在这里**直接以退出码 2 退出**，不会"凑合着用"。早先的版本会默默退回环
@@ -760,5 +760,8 @@ pkill -f bin/dual_charging_station      # 全关掉
 而且 unit 里配了 `RestartPreventExitStatus=2`，端口冲突时不会每 3 秒重拉一
 次把真正的报错冲掉。
 
-> `pgrep -f dual_charging_station` 会把 `mdc_bridge` 也列出来，因为它的路径里
-> 含 `dual_charging_station-linux-arm64`。用 `bin/dual_charging_station` 更准。
+> 三个可执行文件名都带 `chric_software_` 前缀（`chric_software_dual_charging_station` /
+> `chric_software_mdc_bridge` / `chric_software_mdc_fake_pub`），_ps_ / _top_ 里能
+> 一眼认出本项目的进程，也不会被同机上其它同名程序干扰。
+> ROS **包名**（`mdc_bridge`）和 **节点名**（`ros2 node list` 里的 `mdc_bridge`）
+> 没有变，`ros2 run mdc_bridge ...` 照旧可用。

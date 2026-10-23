@@ -149,12 +149,12 @@ jobs:
           STAGE="dist/${PKG_NAME}"
           # 关键：既不 source 本工程的 colcon overlay，也**不设 LD_LIBRARY_PATH**，
           # 完全靠二进制自带的 RPATH 去找 mdc_serial 的库 —— 这正是用户在目标机上
-          # 直接敲 ./bin/mdc_bridge 时的真实情形。
+          # 直接敲 ./bin/chric_software_mdc_bridge 时的 真实情形。
           # 这里翻过两次车：先是打包漏了库；后来用了 DT_RUNPATH，而它对 dlopen
           # 无效，fastrtps 那几个运行时加载的库仍然找不到。
-          APP_BIN="$STAGE/bin/dual_charging_station" \
-          BRIDGE_BIN="$STAGE/bin/mdc_bridge" \
-          FAKE_BIN="$STAGE/bin/mdc_fake_pub" \
+          APP_BIN="$STAGE/bin/chric_software_dual_charging_station" \
+          BRIDGE_BIN="$STAGE/bin/chric_software_mdc_bridge" \
+          FAKE_BIN="$STAGE/bin/chric_software_mdc_fake_pub" \
           OVERLAY_SETUP="" \
           bash tools/ci_smoke_test.sh
 
@@ -195,8 +195,8 @@ jobs:
             echo
             echo "x86_64 与 arm64 两份产物分别由 build-x86_64.yml 与 build-arm64.yml 上传，各覆盖各的文件。"
             echo
-            echo "用法：解包后进入目录，直接执行 bin/dual_charging_station --bridge-host 桥的IP。"
-            echo "装了 ROS2 的机器上再跑 bin/mdc_bridge；没有真机时用 bin/mdc_fake_pub 验证整条链路。"
+            echo "用法：解包后进入目录， 直接执行 bin/chric_software_dual_charging_station --bridge-host 桥的IP。"
+            echo "装了 ROS2 的机器上再跑 bin/chric_software_mdc_bridge；没有真机时用 bin/chric_software_mdc_fake_pub 验证整条链路。"
           } > /tmp/release-notes.md
 
           gh release edit "$RELEASE_TAG" \

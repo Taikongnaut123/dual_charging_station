@@ -15,4 +15,4 @@ set -euo pipefail
 
 PKG_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-exec "${PKG_ROOT}/bin/dual_charging_station" "$@"
+exec "${PKG_ROOT}/bin/chric_software_dual_charging_station" "$@"

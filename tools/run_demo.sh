@@ -15,7 +15,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WS="$ROOT/ros2_ws"
-APP="$ROOT/build/dual_charging_station"
+APP="$ROOT/build/chric_software_dual_charging_station"
+BRIDGE_DIR="$WS/install/mdc_bridge/lib/mdc_bridge"
 
 USE_FAKE=1
 LOOPBACK=0
@@ -67,16 +68,16 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 if [[ $USE_FAKE -eq 1 ]]; then
-  echo "[1/3] 启动假设备 mdc_fake_pub ..."
-  "$WS/install/mdc_bridge/lib/mdc_bridge/mdc_fake_pub" &
+  echo "[1/3] 启动假设备 chric_software_mdc_fake_pub ..."
+  "$BRIDGE_DIR/chric_software_mdc_fake_pub" &
   PIDS+=($!)
   sleep 1
 else
   echo "[1/3] 跳过假设备（假定真机 mdc_node 已在运行）"
 fi
 
-echo "[2/3] 启动 ROS2 桥 mdc_bridge ..."
-"$WS/install/mdc_bridge/lib/mdc_bridge/mdc_bridge" &
+echo "[2/3] 启动 ROS2 桥 chric_software_mdc_bridge ..."
+"$BRIDGE_DIR/chric_software_mdc_bridge" &
 PIDS+=($!)
 sleep 1
 

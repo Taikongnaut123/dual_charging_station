@@ -1,5 +1,5 @@
 [Unit]
-Description=双轮足机器人充电桩显示屏 (dual_charging_station)
+Description=双轮足机器人充电桩显示屏 (chric_software_dual_charging_station)
 # 面板程序不需要网络，但桥要订阅 ROS2 话题，等网络起来更稳
 After=network.target
 # 崩了就让 systemd 一直拉起来，别让屏幕黑着没人管
@@ -21,8 +21,10 @@ RestartPreventExitStatus=2
 # 想强制指定就取消下面这行注释：
 #Environment=QT_QPA_PLATFORM=linuxfb
 Environment=QT_QPA_FB_HIDECURSOR=1
+# Qt 在没设 XDG_RUNTIME_DIR 时会打一行告警（无害），设上就干净了。
+Environment=XDG_RUNTIME_DIR=/run/user/0
 
-# 日志统一进 journal，看的时候 journalctl -u dual-charging-station -f
+# 日志统一进 journal，看的时候 journalctl -u chric-software-dual-charging-station -f
 StandardOutput=journal
 StandardError=journal
 

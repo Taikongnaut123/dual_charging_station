@@ -12,9 +12,9 @@
 #      tools/make_package.sh dual_charging_station-linux-x86_64
 #
 #  产物布局（<包名>/）：
-#      bin/dual_charging_station   显示屏界面（不依赖 ROS2，直接能跑）
-#      bin/mdc_bridge              ROS2 桥（目标机需装 ROS2）
-#      bin/mdc_fake_pub            假设备
+#      bin/chric_software_dual_charging_station   显示屏界面（不依赖 ROS2，直接能跑）
+#      bin/chric_software_mdc_bridge              ROS2 桥（目标机需装 ROS2）
+#      bin/chric_software_mdc_fake_pub            假设备
 #      lib/libmdc_serial__*.so     mdc_serial 接口库，桥运行时 dlopen 它们
 #      run_ui.sh / run_bridge.sh / run_fake.sh / run_demo.sh / _ros_env.sh
 #      README.md / 构建信息.txt
@@ -32,12 +32,12 @@ if [[ -z "$PKG_NAME" ]]; then
     exit 1
 fi
 
-APP="$ROOT/build/dual_charging_station"
+APP="$ROOT/build/chric_software_dual_charging_station"
 BRIDGE_DIR="$ROOT/ros2_ws/install/mdc_bridge/lib/mdc_bridge"
 SERIAL_LIB_DIR="$ROOT/ros2_ws/install/mdc_serial/lib"
 
 # ---------------------------------------------------------------- 前置检查
-for f in "$APP" "$BRIDGE_DIR/mdc_bridge" "$BRIDGE_DIR/mdc_fake_pub"; do
+for f in "$APP" "$BRIDGE_DIR/chric_software_mdc_bridge" "$BRIDGE_DIR/chric_software_mdc_fake_pub"; do
     if [[ ! -f "$f" ]]; then
         echo "缺少 $f —— 先把界面和 ros2_ws 都编译好再打包" >&2
         exit 1
@@ -53,9 +53,9 @@ STAGE="$ROOT/dist/$PKG_NAME"
 rm -rf "$STAGE"
 mkdir -p "$STAGE/bin" "$STAGE/lib"
 
-cp "$APP" "$STAGE/bin/dual_charging_station"
-cp "$BRIDGE_DIR/mdc_bridge"   "$STAGE/bin/"
-cp "$BRIDGE_DIR/mdc_fake_pub" "$STAGE/bin/"
+cp "$APP" "$STAGE/bin/chric_software_dual_charging_station"
+cp "$BRIDGE_DIR/chric_software_mdc_bridge"   "$STAGE/bin/"
+cp "$BRIDGE_DIR/chric_software_mdc_fake_pub" "$STAGE/bin/"
 
 # mdc_serial 的接口库必须整套带上：
 # 桥只**直接**依赖 libmdc_serial__rosidl_typesupport_cpp.so 这一个（ldd 能看见），
@@ -83,10 +83,10 @@ strip "$STAGE"/lib/*.so* 2>/dev/null || true
     echo "编译器    : $(g++ --version | head -n 1)"
     echo
     echo "内容："
-    echo "  bin/dual_charging_station   显示屏界面（不依赖 ROS2，直接能跑）"
-    echo "  bin/mdc_bridge              ROS2 桥（目标机需装 ROS2 ${ROS_DISTRO}）"
-    echo "  bin/mdc_fake_pub            假设备，无真机时验证链路用"
-    echo "  lib/                        mdc_serial 接口库，mdc_bridge 运行时需要"
+    echo "  bin/chric_software_dual_charging_station   显示屏界面（不依赖 ROS2，直接能跑）"
+    echo "  bin/chric_software_mdc_bridge              ROS2 桥（目标机需装 ROS2 ${ROS_DISTRO}）"
+    echo "  bin/chric_software_mdc_fake_pub            假设备，无真机时验证链路用"
+    echo "  lib/                        mdc_serial 接口库，chric_software_mdc_bridge 运行时需要"
     echo "  run_ui.sh                   起界面（不依赖 ROS2）"
     echo "  run_bridge.sh               起桥（自动 source ROS 并设好库路径）"
     echo "  run_fake.sh                 起假设备"
@@ -96,7 +96,7 @@ strip "$STAGE"/lib/*.so* 2>/dev/null || true
     echo "目标机依赖："
     echo "  【只跑界面】"
     echo "      sudo apt install libqt5core5a libqt5gui5 libqt5widgets5 libqt5network5"
-    echo "      起不来先查： ldd ./bin/dual_charging_station | grep 'not found'"
+    echo "      起不来先查： ldd ./bin/chric_software_dual_charging_station | grep 'not found'"
     echo "      若报 libgssapi.so.3 —— 是板子上的 Qt5 用的是 Heimdal 版 GSSAPI，"
     echo "      与我们打包用的 krb5 版不同（不是漏打包），装 libgssapi3-heimdal 即可。"
     echo "  【要跑桥 / 假设备】额外还需要 ROS2 ${ROS_DISTRO}，且必须是同样的发行版："

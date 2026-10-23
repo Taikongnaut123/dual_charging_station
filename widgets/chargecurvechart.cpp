@@ -59,17 +59,20 @@ ChargeCurveChart::ChargeCurveChart(QWidget *parent)
       m_y1Name(QStringLiteral("充电电流")), m_y1Unit(QStringLiteral("A")),
       m_y2Name(QStringLiteral("电池电压")), m_y2Unit(QStringLiteral("V"))
 {
-    setMinimumHeight(Theme::px(150));
+    setMinimumHeight(Theme::px(120));
 }
 
 QSize ChargeCurveChart::sizeHint() const
 {
-    return QSize(360, 220);
+    // 这几个数曾经是写死的 360x220 / 240x140，没跟着缩放走。
+    // 后果：在 1024×768 上曲线卡固定要 220px，三张卡叠起来超过一屏，
+    // 总览页被迫出现滚动条，“充电电流曲线”要下拉才看得到。
+    return QSize(Theme::px(360), Theme::px(150));
 }
 
 QSize ChargeCurveChart::minimumSizeHint() const
 {
-    return QSize(240, 140);
+    return QSize(Theme::px(200), Theme::px(100));
 }
 
 void ChargeCurveChart::setSeries(const QString &y1Name, const QString &y1Unit,
@@ -161,7 +164,13 @@ void ChargeCurveChart::paintEvent(QPaintEvent *)
     }
 
     // ---------- 量程 ----------
-    const int rows = 4;
+    //
+    // 实际满流约 3.8A，自适应到 0~20A 的话曲线挤在底部、看不出波动。
+    // 所以给一个 6A 的下限（实测值的 1.5 倍左右，留安全余量），配合 3 行
+    // 刻度就正好是 0 / 2 / 4 / 6。
+    // 真超过 6A 时会自己往外扩，不会把曲线截断。
+    const int rows = 3;
+    const double kAxisMaxFloor = 6.0;
     const int cols = 4;
 
     double maxY1 = 0.0;
@@ -173,8 +182,8 @@ void ChargeCurveChart::paintEvent(QPaintEvent *)
     }
     double stepY1 = 0.0;
     double stepY2 = 0.0;
-    const double rangeY1 = niceAxisMax(maxY1 * 1.15, 5.0, rows, &stepY1);
-    const double rangeY2 = niceAxisMax(maxY2 * 1.15, 12.0, rows, &stepY2);
+    const double rangeY1 = niceAxisMax(maxY1 * 1.15, kAxisMaxFloor, rows, &stepY1);
+    const double rangeY2 = niceAxisMax(maxY2 * 1.15, kAxisMaxFloor, rows, &stepY2);
     const int decimalsY1 = decimalsFor(stepY1);
     const int decimalsY2 = decimalsFor(stepY2);
 

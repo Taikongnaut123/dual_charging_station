@@ -20,7 +20,7 @@ Card::Card(const QString &title, QWidget *parent)
 
     m_header = new QHBoxLayout;
     m_header->setContentsMargins(0, 0, 0, 0);
-    m_header->setSpacing(Theme::px(10));
+    m_header->setSpacing(Theme::px(8));
 
     m_title = new QLabel(title, this);
     m_title->setObjectName(QStringLiteral("cardTitle"));
@@ -30,7 +30,7 @@ Card::Card(const QString &title, QWidget *parent)
 
     m_content = new QVBoxLayout;
     m_content->setContentsMargins(0, 0, 0, 0);
-    m_content->setSpacing(Theme::px(11));
+    m_content->setSpacing(Theme::px(6));
     root->addLayout(m_content, 1);
 }
 
