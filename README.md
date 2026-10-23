@@ -124,6 +124,44 @@ QT_QPA_PLATFORM=eglfs ./run_ui.sh -f                   # 有 GPU/DRM 且没跑 X
 > 用 framebuffer 时注意两点：`/dev/fb0` 一般属 `root:video`，非 root 用户要加进
 > `video` 组；另外内核控制台日志会盖到画面上，可以 `dmesg -n 1` 降级。
 
+### 右侧留一条黑边（多路输出共用 framebuffer）
+
+**现象**：界面只占左边一大块，右边固定一条竖黑边，但界面本身没有报错。
+
+**原因**：RK3588 这类 SoC 的 drm fbdev 只有一块设备，所有输出共用，尺寸取各路
+输出的**并集**。板子同时点着 HDMI 和板载 DSI 时就会拼出一个不存在的模式：
+
+```bash
+$ fbset -i
+mode "800x768"
+    geometry 800 768 1024 1280 32     # xres=800（DSI 的宽）, yres=768（HDMI 的高）
+    LineLength : 4096                 # 每行其实有 1024 像素
+```
+
+Qt 的 linuxfb 只看 `xres`/`yres`，于是把屏幕当成 800×768，界面画满 800 就收工；
+而每行实际 1024 像素，右边 224 列一个像素都没写 → 黑边。
+
+**程序自带修正**：启动时若检测到「同时有多路输出启用」且「`xres_virtual > xres`
+且行宽等于 `xres_virtual`」，会在 Qt 加载平台插件**之前**把 `xres` 改成真实行宽：
+
+```
+[显示] 多路输出共用一块 framebuffer：内核报可见宽度 800，实际行宽 1024，已修正（否则右侧会留一条黑边）
+```
+
+单屏板子不会触发（`xres` 本来就是对的），要关掉这个行为设 `DCS_NO_FB_FIX=1`。
+
+**手工确认 / 临时验证**：
+
+```bash
+fbset -i -fb /dev/fb0                       # 看 geometry 四个数
+cat /sys/kernel/debug/dri/0/summary         # 看各路 Video Port 的实际模式
+fbset -fb /dev/fb0 -xres 1024 -yres 768     # 现改现看（重启失效）
+```
+
+如果板载屏根本不用（只接 HDMI），更彻底的做法是在内核参数里关掉多余那一路
+（`video=DSI-1:d`），让 fbdev 直接按 HDMI 的尺寸建，`fbset -i` 就是干净的
+`1024x768`。
+
 ### 链路三态（排障关键）
 
 页眉的链路胶囊有三种状态，能直接区分"桥没起来"和"设备没数据"：

@@ -4,6 +4,7 @@
 #include <QApplication>
 #include <QCommandLineOption>
 #include <QCommandLineParser>
+#include <QDir>
 #include <QFile>
 #include <QGuiApplication>
 #include <QLocale>
@@ -11,6 +12,11 @@
 #include <QStyleFactory>
 #include <QTimer>
 #include <QTranslator>
+
+#include <fcntl.h>
+#include <linux/fb.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
 
 #include <cmath>
 #include <cstdio>
@@ -74,6 +80,104 @@ namespace
                      qgetenv("DISPLAY").constData());
         std::fflush(stderr);
     }
+
+    /**
+     * 当前有哪几路输出是“接着且已启用”的。
+     *
+     * /sys/class/drm/card0-* 每个子目录对应一路连接器，status 是插没插线，
+     * enabled 是内核有没有给它点屏。fbdev 的尺寸问题只在多路同时启用时出现。
+     */
+    int activeDisplayCount()
+    {
+        int n = 0;
+        const QDir drm(QStringLiteral("/sys/class/drm"));
+        const QStringList entries =
+            drm.entryList(QDir::AllEntries | QDir::System | QDir::NoDotAndDotDot);
+        for (const QString &e : entries)
+        {
+            if (!e.startsWith(QLatin1String("card")))
+                continue;
+
+            QFile status(QStringLiteral("/sys/class/drm/%1/status").arg(e));
+            QFile enabled(QStringLiteral("/sys/class/drm/%1/enabled").arg(e));
+            if (!status.open(QIODevice::ReadOnly) || !enabled.open(QIODevice::ReadOnly))
+                continue;
+            if (status.readAll().trimmed() == QByteArrayLiteral("connected")
+                && enabled.readAll().trimmed() == QByteArrayLiteral("enabled"))
+                ++n;
+        }
+        return n;
+    }
+
+    /**
+     * 多路输出共用一块 framebuffer 时，修正内核报出来的假尺寸。
+     *
+     * RK3588 这类 SoC 的 drm fbdev 只有一块设备，会被所有输出共用，尺寸取
+     * 各路输出的并集。现场这块板同时点着 HDMI 和板载 DSI：
+     *
+     *     # fbset -i
+     *     mode "800x768"
+     *         geometry 800 768 1024 1280 32
+     *         LineLength 4096                ← 每行其实有 1024 像素
+     *
+     * 800 是 DSI 屏的宽、768 是 HDMI 的高，内核拼出来一个不存在的模式。
+     * Qt 的 linuxfb 只看 xres/yres，于是把屏幕当成 800x768，界面铺满 800×768
+     * 就收工；而实际每行 1024 像素，右边 224 列一个像素都没写，永远是黑的。
+     * 现场看到的就是“右边一条黑边”。
+     *
+     * 这里在 Qt 加载平台插件之前把 xres 改成真实行宽（xres_virtual），Qt 就能
+     * 拿到 1024x768，界面自然铺满。
+     *
+     * 只在“多路输出同时启用”时才动手：单屏板子 fbdev 尺寸本来就是对的，而有些
+     * 单屏板子用 xres_virtual 做 panning，改了反而会把内容推到画面外。
+     * 确实需要关掉时，设环境变量 DCS_NO_FB_FIX=1。
+     */
+    void fixFbdevGeometryIfUnioned()
+    {
+        if (qEnvironmentVariableIsSet("DCS_NO_FB_FIX"))
+            return;
+        if (!qgetenv("QT_QPA_PLATFORM").startsWith(QByteArrayLiteral("linuxfb")))
+            return;
+        if (activeDisplayCount() < 2)
+            return;
+
+        const QByteArray dev = qEnvironmentVariableIsEmpty("QT_QPA_FB")
+                                   ? QByteArrayLiteral("/dev/fb0")
+                                   : qgetenv("QT_QPA_FB");
+        const int fd = ::open(dev.constData(), O_RDWR | O_CLOEXEC);
+        if (fd < 0)
+            return;
+
+        fb_var_screeninfo var {};
+        fb_fix_screeninfo fix {};
+        const bool queried = ::ioctl(fd, FBIOGET_VSCREENINFO, &var) == 0
+                             && ::ioctl(fd, FBIOGET_FSCREENINFO, &fix) == 0;
+        if (queried && var.bits_per_pixel > 0 && fix.line_length > 0
+            && var.xres_virtual > var.xres
+            && fix.line_length * 8u / var.bits_per_pixel == var.xres_virtual)
+        {
+            const unsigned reported = var.xres;
+            fb_var_screeninfo want = var;
+            want.xres = var.xres_virtual;
+            want.xoffset = 0;
+            if (::ioctl(fd, FBIOPUT_VSCREENINFO, &want) == 0)
+            {
+                std::fprintf(stderr,
+                             "[显示] 多路输出共用一块 framebuffer：内核报可见宽度 %u，"
+                             "实际行宽 %u，已修正（否则右侧会留一条黑边）\n",
+                             reported, unsigned(var.xres_virtual));
+            }
+            else
+            {
+                std::fprintf(stderr,
+                             "[显示] 多路输出共用一块 framebuffer：可见宽度 %u 小于"
+                             "实际行宽 %u，修正失败，右侧可能留黑边\n",
+                             reported, unsigned(var.xres_virtual));
+            }
+            std::fflush(stderr);
+        }
+        ::close(fd);
+    }
 } // namespace
 
 int main(int argc, char *argv[])
@@ -97,6 +201,9 @@ int main(int argc, char *argv[])
 
     // 同样必须早于 QApplication：平台插件是在构造时加载的
     pickPlatformFallback();
+
+    // 也必须在 QApplication 之前：linuxfb 插件在构造时就把 fb 尺寸读走了
+    fixFbdevGeometryIfUnioned();
 
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     // 工控屏普遍是高 DPI 小尺寸面板，开启缩放保证界面不糊
@@ -191,6 +298,26 @@ int main(int argc, char *argv[])
             // 很容易触发），availableGeometry() 给的是逻辑像素，会比物理像素
             // 小一大截，卡在 0.6 就会溢出屏幕。
             geoScale = qBound(0.35, geoScale, 1.0);
+
+            // 方向/比例自检。本界面按 1360×800 横屏设计，如果输出被接成了
+            // 竖屏（例如 HDMI 模式是 1024×1280 而面板是 1024×768），显示器
+            // 会自己缩放，结果是画面被压扁 + 一侧留黑边。这类问题在程序里
+            // 修不了，但至少要说出来，别让人以为是界面写错了。
+            const qreal screenRatio = avail.width() / qreal(avail.height());
+            const qreal designRatio = Theme::kDesignWidth / qreal(Theme::kDesignHeight);
+            if (screenRatio < 1.0 || qAbs(screenRatio - designRatio) > designRatio * 0.35)
+            {
+                std::fprintf(stderr,
+                             "[显示] 注意：屏幕 %dx%d（宽高比 %.2f）与设计稿 %dx%d"
+                             "（宽高比 %.2f）相差较大。\n"
+                             "       如果看到画面被压扁或一侧留黑边，请先把输出模式"
+                             "改成面板原生分辨率（这块 8 寸屏是 1024x768@60）：\n"
+                             "       video=HDMI-A-1:1024x768@60（内核参数），"
+                             "改完用 cat /sys/class/graphics/fb0/virtual_size 确认。\n",
+                             avail.width(), avail.height(), double(screenRatio),
+                             Theme::kDesignWidth, Theme::kDesignHeight, double(designRatio));
+                std::fflush(stderr);
+            }
         }
     }
     if (parser.isSet(uiScaleOption))
