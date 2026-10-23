@@ -45,6 +45,9 @@ env:
   ROS_DISTRO: humble
   RELEASE_TAG: latest
   PKG_NAME: dual_charging_station-linux-arm64
+  # 界面可执行文件名。包了 chric_software_ 前缀，改名时只改这里；
+  # 下面所有检查都引用它，不再手写死文件名（之前就是漏改了一处导致 CI 红）。
+  APP_EXE: chric_software_dual_charging_station
 
 jobs:
   build:
@@ -107,7 +110,7 @@ jobs:
           cd build
           qmake ../dual_charging_station.pro "CONFIG+=release" "CONFIG-=debug"
           make -j"$(nproc)"
-          test -x dual_charging_station
+          test -x "${APP_EXE}"
 
       - name: 编译 ROS2 桥（colcon）
         run: |
@@ -124,12 +127,12 @@ jobs:
       - name: 校验产物架构与动态库
         run: |
           set -euo pipefail
-          file build/dual_charging_station
-          file build/dual_charging_station | grep -q 'ARM aarch64' \
-            || { echo "产物架构不对，期望 ARM aarch64"; exit 1; }
-          if ldd build/dual_charging_station | grep -q 'not found'; then
+          file "build/${APP_EXE}"
+          file "build/${APP_EXE}" | grep -q 'ARM aarch64' \
+            || { echo "产物架构不对，期望 aarch64"; exit 1; }
+          if ldd "build/${APP_EXE}" | grep -q 'not found'; then
             echo "存在找不到的动态库："
-            ldd build/dual_charging_station | grep 'not found'
+            ldd "build/${APP_EXE}" | grep 'not found'
             exit 1
           fi
           echo "架构与动态库检查通过"
