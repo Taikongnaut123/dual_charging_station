@@ -86,3 +86,6 @@ logs/
 Thumbs.db
 desktop.ini
 
+
+# 没有 HOME 时（例如 systemd 拉起、且 unit 没设 HOME）累计统计会落到这里
+/config/

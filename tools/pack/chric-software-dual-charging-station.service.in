@@ -23,6 +23,11 @@ RestartPreventExitStatus=2
 Environment=QT_QPA_FB_HIDECURSOR=1
 # Qt 在没设 XDG_RUNTIME_DIR 时会打一行告警（无害），设上就干净了。
 Environment=XDG_RUNTIME_DIR=/run/user/0
+# systemd 给 system service 不设 HOME，而程序要拿它定位累计统计文件
+# （RobotCharge/DualChargingStation.conf）。不设的后果是累计次数/电量永远是
+# 0、重启一次清一次，而且 Qt 不会报错。程序那边也做了兵底（没 HOME 就落到
+# 包目录的 config/），这里设上是为了让手工跑和服务跑用同一份数据。
+Environment=HOME=/root
 
 # 日志统一进 journal，看的时候 journalctl -u chric-software-dual-charging-station -f
 StandardOutput=journal

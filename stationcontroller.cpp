@@ -1,12 +1,53 @@
 #include "stationcontroller.h"
 
+#include <QCoreApplication>
+#include <QDir>
+#include <QFileInfo>
 #include <QSettings>
+
+#include <cstdio>
 
 namespace
 {
 
     constexpr int kCurveMaxPoints = 180; // 曲线保留点数（2Hz x 180 = 90 秒窗口）
     constexpr int kCurveKeepEvery = 1;   // 每帧都采（设备本身就是 2Hz）
+
+    /**
+     * 统计文件的绝对路径（累计充电次数 / 累计电量）。
+     *
+     * 不能直接用 QSettings(组织名, 程序名)：那条路依赖 $XDG_CONFIG_HOME 或
+     * $HOME 算目录，而**由 systemd 拉起的 system service 这两者都没设**。
+     * 拿不到路径时 QSettings 不会报错，只是读回来全是默认值、写下去直接丢掉，
+     * 现场表现就是“累计次数/电量永远是 0，重启一次清一次”。
+     *
+     * 所以自己算：优先走标准位置（手工跑的时候跟以前完全一致），两个环境变量
+     * 都没有时落到**可执行文件旁边的 config/**，跟桥把日志收到包目录的做法一致：
+     * 包目录挪到哪，统计就跟到哪，不依赖谁的环境变量。
+     */
+    QString statisticsFilePath()
+    {
+        static const QString path = [] {
+            QString base = qEnvironmentVariable("XDG_CONFIG_HOME");
+            if (base.isEmpty())
+            {
+                const QString home = qEnvironmentVariable("HOME");
+                if (!home.isEmpty())
+                    base = home + QLatin1String("/.config");
+            }
+            if (base.isEmpty())
+            {
+                base = QCoreApplication::applicationDirPath()
+                       + QLatin1String("/../config");
+                std::fprintf(stderr,
+                             "[统计] 没有 XDG_CONFIG_HOME / HOME，累计统计改写到 %s\n",
+                             qPrintable(QFileInfo(base).absoluteFilePath()));
+            }
+            const QString dir = base + QLatin1String("/RobotCharge");
+            return dir + QLatin1String("/DualChargingStation.conf");
+        }();
+        return path;
+    }
 
 } // namespace
 
@@ -292,7 +333,8 @@ int StationController::remainingSeconds() const
 
 void StationController::loadStatistics()
 {
-    QSettings settings(QStringLiteral("RobotCharge"), QStringLiteral("DualChargingStation"));
+    // 显式指定 IniFormat + 绝对路径：不依赖环境变量，行为可预测
+    QSettings settings(statisticsFilePath(), QSettings::IniFormat);
     m_totalSessions = settings.value(QStringLiteral("stats/sessions"), 0).toInt();
     m_totalEnergyKwh = settings.value(QStringLiteral("stats/totalEnergyKwh"), 0.0).toDouble();
     m_packCapacityKwh = settings.value(QStringLiteral("config/packCapacityKwh"), 1.92).toDouble();
@@ -300,9 +342,13 @@ void StationController::loadStatistics()
 
 void StationController::saveStatistics()
 {
-    QSettings settings(QStringLiteral("RobotCharge"), QStringLiteral("DualChargingStation"));
+    const QString path = statisticsFilePath();
+    // QSettings 会建文件，但不会建中间的目录
+    QDir().mkpath(QFileInfo(path).absolutePath());
+    QSettings settings(path, QSettings::IniFormat);
     settings.setValue(QStringLiteral("stats/sessions"), m_totalSessions);
     settings.setValue(QStringLiteral("stats/totalEnergyKwh"), m_totalEnergyKwh);
+    settings.sync();
 }
 
 void StationController::resetStatistics()
