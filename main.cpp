@@ -109,29 +109,6 @@ namespace
     }
 
     /**
-     * 读一次 framebuffer 的几何信息。
-     *
-     * 只读，不改任何东西。拿不到就返回 false。
-     */
-    bool readFbGeometry(const QByteArray &dev, unsigned *xres, unsigned *xresVirtual, unsigned *yres)
-    {
-        const int fd = ::open(dev.constData(), O_RDONLY | O_CLOEXEC);
-        if (fd < 0)
-            return false;
-
-        fb_var_screeninfo var{};
-        const bool ok = ::ioctl(fd, FBIOGET_VSCREENINFO, &var) == 0;
-        ::close(fd);
-        if (!ok)
-            return false;
-
-        *xres = var.xres;
-        *xresVirtual = var.xres_virtual;
-        *yres = var.yres;
-        return true;
-    }
-
-    /**
      * 多路输出共用一块 framebuffer 时，修正内核报出来的假尺寸。
      *
      * RK3588 这类 SoC 的 drm fbdev 只有一块设备，会被所有输出共用，尺寸取
@@ -161,44 +138,29 @@ namespace
         if (!qgetenv("QT_QPA_PLATFORM").startsWith(QByteArrayLiteral("linuxfb")))
             return;
 
-        // 先等 framebuffer 的几何稳定下来。
+        // 先等“多路输出同时启用”这个条件成立。
         //
         // 开机自启时 HDMI 的 modeset 是异步的：服务被 systemd 拉起的那一刻
-        // HDMI 往往还没点屏，fb 里只有板载 DSI 一路的尺寸（800x768）。这时候
-        // 直接往下走，activeDisplayCount() 只数到 1，函数就 return 了 —— 界面
-        // 按 800 宽铺，右边 224 列永远是黑的。手动 systemctl restart 时 HDMI
-        // 早就亮了，所以表现为“重启一下就好、断电重启又坏”。
+        // HDMI 往往还没 enabled，fb 里只有板载 DSI 一路的尺寸（800x768）。
+        // 这时候直接往下走，activeDisplayCount() 只数到 1，函数就 return 了 ——
+        // 界面按 800 宽铺，右边 224 列永远是黑的。手动 systemctl restart 时
+        // HDMI 早就亮了，所以表现为“重启一下就好、断电重启又坏”。
         //
-        // 判据用 fb 几何而不是 DRM 的 status：HDMI 刚插上时 status 可能还是
-        // disconnected（EDID 还在 I2C 上探测，现场日志里能看到一串
-        // "i2c write nack"），拿 status 判断会漏掉这段窗口。
+        // 现场实测（09:19 那次失败）：
+        //     09:19:20.864881  应用启动，读 fb → 800x768，count=1 → 直接 return
+        //     09:19:20.914864  内核 Update mode to 1024x768p60 (HDMI0)
         //
-        // 具体做法：连续两次读到同样的几何才算稳定，最多等 3 秒。
-        const QByteArray dev = qEnvironmentVariableIsEmpty("QT_QPA_FB")
-                                   ? QByteArrayLiteral("/dev/fb0")
-                                   : qgetenv("QT_QPA_FB");
-        unsigned prevX = 0, prevXv = 0, prevY = 0;
+        // 没插线的输出 status 是 disconnected，不会让这里白等满 3 秒。
         int waitedMs = 0;
-        bool havePrev = readFbGeometry(dev, &prevX, &prevXv, &prevY);
-        while (waitedMs < 3000)
+        while (waitedMs < 3000 && activeDisplayCount() < 2)
         {
             ::usleep(50 * 1000);
             waitedMs += 50;
-
-            unsigned x = 0, xv = 0, y = 0;
-            if (!readFbGeometry(dev, &x, &xv, &y))
-                continue;
-            if (havePrev && x == prevX && xv == prevXv && y == prevY)
-                break; // 连续两次一致，认为内核已经点完屏
-            prevX = x;
-            prevXv = xv;
-            prevY = y;
-            havePrev = true;
         }
         if (waitedMs > 0)
         {
             std::fprintf(stderr,
-                         "[显示] 等待 framebuffer 几何稳定 %d ms（开机时 HDMI 的 modeset 比服务启动晚）\n",
+                         "[显示] 等待第二路输出点亮 %d ms（开机时 HDMI 的 modeset 比服务启动晚）\n",
                          waitedMs);
             std::fflush(stderr);
         }
@@ -206,6 +168,9 @@ namespace
         if (activeDisplayCount() < 2)
             return;
 
+        const QByteArray dev = qEnvironmentVariableIsEmpty("QT_QPA_FB")
+                                   ? QByteArrayLiteral("/dev/fb0")
+                                   : qgetenv("QT_QPA_FB");
         const int fd = ::open(dev.constData(), O_RDWR | O_CLOEXEC);
         if (fd < 0)
             return;
