@@ -109,6 +109,38 @@ namespace
     }
 
     /**
+     * 有没有“已经接上、但内核还没点亮”的输出。
+     *
+     * RK3588 上 HDMI 的 modeset 是异步的：systemd 拉起服务时 HDMI 可能还
+     * 没 enabled，几十毫秒之后才点屏。这段时间里 fb 只有 DSI 一路的尺寸。
+     * 现场实测差 50ms：
+     *
+     *     09:19:20.864881  应用启动，读 fb → 800x768
+     *     09:19:20.914864  内核 Update mode to 1024x768p60 (HDMI0)
+     *
+     * 没插线的输出 status 是 disconnected，不会让这里白等。
+     */
+    bool hasPendingConnector()
+    {
+        const QDir drm(QStringLiteral("/sys/class/drm"));
+        const QStringList entries =
+            drm.entryList(QDir::AllEntries | QDir::System | QDir::NoDotAndDotDot);
+        for (const QString &e : entries)
+        {
+            if (!e.startsWith(QLatin1String("card")))
+                continue;
+
+            QFile status(QStringLiteral("/sys/class/drm/%1/status").arg(e));
+            QFile enabled(QStringLiteral("/sys/class/drm/%1/enabled").arg(e));
+            if (!status.open(QIODevice::ReadOnly) || !enabled.open(QIODevice::ReadOnly))
+                continue;
+            if (status.readAll().trimmed() == QByteArrayLiteral("connected") && enabled.readAll().trimmed() != QByteArrayLiteral("enabled"))
+                return true;
+        }
+        return false;
+    }
+
+    /**
      * 多路输出共用一块 framebuffer 时，修正内核报出来的假尺寸。
      *
      * RK3588 这类 SoC 的 drm fbdev 只有一块设备，会被所有输出共用，尺寸取
@@ -137,6 +169,30 @@ namespace
             return;
         if (!qgetenv("QT_QPA_PLATFORM").startsWith(QByteArrayLiteral("linuxfb")))
             return;
+
+        // 先等内核把“已接上但还没点亮”的输出点起来。
+        //
+        // 开机自启时 HDMI 的 modeset 是异步的，服务被 systemd 拉起的那一刻
+        // HDMI 往往还没 enabled，fb 里只有 DSI 一路的尺寸。这时候直接往下走，
+        // activeDisplayCount() 只数到 1，函数就 return 了 —— 界面按 800 宽铺，
+        // 右边 224 列永远是黑的。手动 systemctl restart 时 HDMI 早就亮了，
+        // 所以表现为“重启一下就好、断电重启又坏”。
+        //
+        // 没插线的输出 status 是 disconnected，不会让这里白等。
+        int waitedMs = 0;
+        while (waitedMs < 3000 && hasPendingConnector())
+        {
+            ::usleep(50 * 1000);
+            waitedMs += 50;
+        }
+        if (waitedMs > 0)
+        {
+            std::fprintf(stderr,
+                         "[显示] 等待输出点亮 %d ms（开机时 HDMI 的 modeset 比服务启动晚）\n",
+                         waitedMs);
+            std::fflush(stderr);
+        }
+
         if (activeDisplayCount() < 2)
             return;
 
