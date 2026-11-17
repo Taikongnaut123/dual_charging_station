@@ -23,7 +23,12 @@ namespace
     // 剩余时间指数平滑系数（2Hz 下约 2.5 秒时间常数）
     constexpr double kRemainSmoothAlpha = 0.2;
     // 电池组最低可信电压（V）。13S 电池组放到 2.5V/串 也有 32.5V，
-    // 低于这个值只可能是没接电池或采样异常。
+    // 低于这个值说明电压字段不可用（设备没采到 / 没接电池）。
+    //
+    // 注意：**不能**拿它当估算的硬门槛。现场设备在正常充电时
+    // auto_total_voltage 就报 0（电流 3.5A、SOC 5%、充电状态 1 都正常），
+    // 拿电压卡门槛会把正常充电也拦掉，界面一直显示 `--`。
+    // 所以电压只用来辅助判定 CC/CV，不可信时退化成只看电流。
     constexpr double kMinPackVoltageV = 30.0;
 
     /**
@@ -388,15 +393,18 @@ void StationController::updateRemainingEstimate(const MdcData &d)
 
     // 电流太小（没真正在充 / 刚上电还没起流）时不给估算，免得显示一个巨大的数。
     //
-    // 电压也要校验：现场见过「充电开关打开但电池没接」的状态，设备照样报
-    // 2~3A 电流、SOC 报 0%、电压报 0.00V。只看电流的话会把它当成正常充电，
-    // 按 SOC=0% 算出「还要 4 小时」，屏幕上挂着一个毫无意义的读数。
-    if (currentA < 0.1 || voltageV < kMinPackVoltageV || m_packCapacityAh <= 0.0)
+    // 电压**不**作为门槛：现场设备正常充电时 auto_total_voltage 就报 0，
+    // 拿电压卡会把正常充电也拦掉。电压只在下面判定 CC/CV 时用，
+    // 不可信时退化成只看电流回落。
+    if (currentA < 0.1 || m_packCapacityAh <= 0.0)
     {
         m_remainingSeconds = -1;
         m_remainingRaw = -1.0;
         return;
     }
+
+    // 电压字段是否可信（设备可能没采到，报 0）
+    const bool voltageValid = (voltageV >= kMinPackVoltageV);
 
     // CC 段电流：取本次会话观测到的最大值。
     // 刚插上时电流还在爬升，用瞬时值会把 CC 电流低估，剩余时间算长。
@@ -413,11 +421,14 @@ void StationController::updateRemainingEstimate(const MdcData &d)
     // 明显不合常理。恒压段充入电量实际很少超过 30%，这里兜一下底。
     const double socCv = qBound(70.0, 100.0 - cvChargeAh / m_packCapacityAh * 100.0, 99.0);
 
-    // 判定当前在 CC 还是 CV：电流已从 CC 值明显回落、且电压接近限制值。
+    // 判定当前在 CC 还是 CV：电流已从 CC 值明显回落。
+    // 电压可信时再要求电压接近限制值，双重确认；电压不可信（报 0）时
+    // 只看电流回落——电流从 CC 值掉下来本身就是进入恒压段的直接证据。
     // 另外 SOC 一旦越过转折点 socCv，即使电流还没明显回落，也已经进入恒压段了
     // （否则 SOC=100% 时还会算出「还要 48 分钟」，明显不对）。
-    const bool inCv = (currentA < iCc * kCvDetectRatio) &&
-                      (voltageV > m_chargeLimitV - 1.0);
+    const bool currentDropped = (currentA < iCc * kCvDetectRatio);
+    const bool inCv = currentDropped &&
+                      (!voltageValid || voltageV > m_chargeLimitV - 1.0);
 
     double seconds = 0.0;
     if (soc >= 99.5)
