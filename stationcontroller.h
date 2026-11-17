@@ -81,13 +81,23 @@ public:
     // ---------------------------------------------------------- 本地统计
     double sessionEnergyKwh() const { return m_sessionEnergyKwh; }
     int sessionSeconds() const { return m_sessionSeconds; }
-    /** 预计剩余时间（秒），-1 表示无法估算 */
-    int remainingSeconds() const;
+    /**
+     * 预计剩余充电时间（秒），-1 表示无法估算。
+     *
+     * 由 integrate() 每帧（2Hz）重算并做指数平滑后缓存，这里只读缓存值：
+     * 直接按当前电流现算的话，读数会随电流抖动每 0.5 秒跳一次。
+     */
+    int remainingSeconds() const { return m_remainingSeconds; }
     int totalSessions() const { return m_totalSessions; }
     double totalEnergyKwh() const { return m_totalEnergyKwh; }
-    /** 仅用于估算剩余时间与充电量，需按实际电池组容量配置 */
-    double packCapacityKwh() const { return m_packCapacityKwh; }
-    void setPackCapacityKwh(double kwh) { m_packCapacityKwh = kwh; }
+
+    /** 电池组标称容量（Ah），默认 10Ah（CDRX4810，13S2P） */
+    double packCapacityAh() const { return m_packCapacityAh; }
+    /** 电池组标称电压（V），默认 46.8V（3.6V × 13 串） */
+    double packNominalV() const { return m_packNominalV; }
+    /** 标称能量（kWh）= Ah × 标称电压 / 1000，默认 0.468 kWh */
+    double packCapacityKwh() const { return m_packCapacityAh * m_packNominalV / 1000.0; }
+    void setPackCapacityAh(double ah) { m_packCapacityAh = ah; }
 
     /** 当前在充/已连的口：0=无 1=手动 2=自动 */
     int activePort() const;
@@ -115,6 +125,8 @@ private:
     void evaluateState(const MdcData &d);
     void updateCcuStage(const MdcData &d);
     void integrate(const MdcData &d);
+    /** 按 CC/CV 两段模型估算剩余时间，结果写进 m_remainingSeconds */
+    void updateRemainingEstimate(const MdcData &d);
     void startSession();
     void finishSession();
     void loadStatistics();
@@ -141,7 +153,18 @@ private:
     int m_sessionPort = 0;            // 本次充电是哪个口（1手动 2自动）
     double m_totalEnergyKwh = 0.0;
     int m_totalSessions = 0;
-    double m_packCapacityKwh = 1.92; // 48V / 40Ah，按实际电池组改
+
+    // ---- 电池组参数（CDRX4810 规格书 V0.2）----
+    // 13S2P / 标称 10Ah / 标称 46.8V / 充电限制 54.6V / 截止 0.02C(200mA)
+    double m_packCapacityAh = 10.0; // 标称容量 Ah
+    double m_packNominalV = 46.8;   // 标称电压 V（3.6V × 13）
+    double m_chargeLimitV = 54.6;   // 充电限制电压 V（4.2V × 13）
+    double m_taperCurrentA = 0.2;   // 充电截止电流 A（0.02C）
+
+    // ---- 剩余时间估算 ----
+    int m_remainingSeconds = -1;  // 平滑后的剩余时间，-1 = 无法估算
+    double m_remainingRaw = -1.0; // 上一帧的原始估算值（平滑用）
+    double m_ccCurrentA = 0.0;    // 本次会话观测到的最大充电电流（≈CC 段电流）
 
     QVector<CurvePoint> m_curve;
     int m_curveDivider = 0;
