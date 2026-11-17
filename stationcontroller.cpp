@@ -22,6 +22,9 @@ namespace
     constexpr double kCvDetectRatio = 0.85;
     // 剩余时间指数平滑系数（2Hz 下约 2.5 秒时间常数）
     constexpr double kRemainSmoothAlpha = 0.2;
+    // 电池组最低可信电压（V）。13S 电池组放到 2.5V/串 也有 32.5V，
+    // 低于这个值只可能是没接电池或采样异常。
+    constexpr double kMinPackVoltageV = 30.0;
 
     /**
      * 统计文件的绝对路径（累计充电次数 / 累计电量）。
@@ -383,8 +386,12 @@ void StationController::updateRemainingEstimate(const MdcData &d)
     const double currentA = autoPort ? d.autoChargeCurrentA() : d.manualChargeCurrentA();
     const double voltageV = autoPort ? d.autoVoltageV() : d.manualVoltageV();
 
-    // 电流太小（没真正在充 / 刚上电还没起流）时不给估算，免得显示一个巨大的数
-    if (currentA < 0.1 || m_packCapacityAh <= 0.0)
+    // 电流太小（没真正在充 / 刚上电还没起流）时不给估算，免得显示一个巨大的数。
+    //
+    // 电压也要校验：现场见过「充电开关打开但电池没接」的状态，设备照样报
+    // 2~3A 电流、SOC 报 0%、电压报 0.00V。只看电流的话会把它当成正常充电，
+    // 按 SOC=0% 算出「还要 4 小时」，屏幕上挂着一个毫无意义的读数。
+    if (currentA < 0.1 || voltageV < kMinPackVoltageV || m_packCapacityAh <= 0.0)
     {
         m_remainingSeconds = -1;
         m_remainingRaw = -1.0;
